@@ -1,0 +1,16 @@
+[package]
+name = "quantum_circuit"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+num = "0.4"
+rand = "0.8.4"
+indexmap = "1.9.1"
+bit-vec = "0.6.3"
+rayon = "1.5.3"
+
+[profile.release]
+debug = true
