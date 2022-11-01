@@ -117,7 +117,7 @@ pub mod util {
 	}
 }
 
-
+#[cfg(test)]
 pub mod tests {
 	use rand::Rng;
 
@@ -176,4 +176,39 @@ pub mod tests {
 			}
 		}
 	}
+
+	#[test]
+	fn time_take_data_graph() {
+		
+	}
+}
+
+
+pub mod benchmarks {
+	use crate::compute_entropy::take_data;
+	use crate::quantum_chp_state::QuantumCHPState;
+	use crate::quantum_graph_state::QuantumGraphState;
+
+	use std::time::Instant;
+
+	fn time_code(func_name: &str, func: &dyn Fn() -> ()) -> String {
+		let now = Instant::now();
+		func();
+		let elapsed = now.elapsed();
+		return format!("{} took {:2?}.", func_name, elapsed);
+	}
+
+	pub fn take_data_chp() {
+		println!("{}", time_code("take_data_chp", &|| {
+    		take_data::<QuantumCHPState>(10, 3, 1000, 100, String::from("_data.txt") )
+		}));
+	}
+
+
+	pub fn take_data_graph() {
+		println!("{}", time_code("take_data_graph", &|| {
+    		take_data::<QuantumGraphState>(10, 3, 1000, 100, String::from("_data.txt") )
+		}));
+	}
+
 }

@@ -5,9 +5,9 @@ use crate::dataframe::DataFrame;
 use rayon::prelude::*;
 use rand::Rng;
 
-pub fn compute_entropy(system_size: usize, subsystem_size: usize, mzr_prob: f32, time: usize) -> f32 {
+pub fn compute_entropy<Q: QuantumState + Entropy>(system_size: usize, subsystem_size: usize, mzr_prob: f32, time: usize) -> f32 {
     assert!(0. < mzr_prob && mzr_prob < 1.);
-    let mut quantum_state: QuantumCHPState = QuantumCHPState::new(system_size);
+    let mut quantum_state: Q = Q::new(system_size);
     let mut rng = rand::thread_rng();
     for t in 0..time {
         for i in 0..system_size/2 { // first layer of unitaries
@@ -37,7 +37,8 @@ pub fn compute_entropy(system_size: usize, subsystem_size: usize, mzr_prob: f32,
     return quantum_state.renyi_entropy(&qubits);
 }
 
-fn gen_dataframe(system_size: usize, partition_size: usize, prob: f32, timesteps: usize, num_runs: usize) -> DataFrame {
+
+fn gen_dataframe<Q: QuantumState + Entropy>(system_size: usize, partition_size: usize, prob: f32, timesteps: usize, num_runs: usize) -> DataFrame {
 	let mut df: DataFrame = DataFrame::new();
 	df.add_int_param("L", system_size as i32);
 	df.add_int_param("LA", partition_size as i32);
@@ -45,7 +46,7 @@ fn gen_dataframe(system_size: usize, partition_size: usize, prob: f32, timesteps
 	df.add_data("entropy");
 
 	for n in 0..num_runs {
-		df.push_data("entropy", compute_entropy(system_size, partition_size, prob, timesteps));
+		df.push_data("entropy", compute_entropy::<Q>(system_size, partition_size, prob, timesteps));
 	}
 
 	return df;
@@ -53,9 +54,8 @@ fn gen_dataframe(system_size: usize, partition_size: usize, prob: f32, timesteps
 
 
 
-pub fn take_data(system_size: usize, num_system_sizes: usize, 
-                 timesteps: usize, num_runs: usize, num_threads: usize, filename: String) {
-    rayon::ThreadPoolBuilder::new().num_threads(num_threads).build_global().unwrap();
+pub fn take_data<Q: QuantumState + Entropy>(system_size: usize, num_system_sizes: usize, 
+                 timesteps: usize, num_runs: usize, filename: String) {
     
     let probs: Vec<f32> = vec![0.06, 0.08, 0.1, 0.138, 0.16];
     let partition_sizes: Vec<usize> = (0..system_size/2).step_by(system_size/num_system_sizes).collect();
@@ -70,7 +70,7 @@ pub fn take_data(system_size: usize, num_system_sizes: usize,
         }
     }
 
-    let data: Vec<DataFrame> = params.into_par_iter().map(|x| gen_dataframe(system_size, x.1, x.0, timesteps, num_runs)).collect();
+    let data: Vec<DataFrame> = params.into_par_iter().map(|x| gen_dataframe::<Q>(system_size, x.1, x.0, timesteps, num_runs)).collect();
 
     println!("done!");
     DataFrame::write_dataframes(&filename, data);
