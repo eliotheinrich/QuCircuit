@@ -2,7 +2,7 @@ target
 *.pyc
 .vscode
 __pycache__
-data.txt
+*data.txt
 jobs
 *.sl
-
+.DS_Store

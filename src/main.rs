@@ -1,15 +1,17 @@
 use quantum_circuit::compute_entropy::take_data;
-use quantum_circuit::util::*;
+use quantum_circuit::quantum_chp_state::QuantumCHPState;
 use std::time::Instant;
-use rayon::prelude::*;
 
 fn main() {
+    let num_threads = 48;
+    rayon::ThreadPoolBuilder::new().num_threads(num_threads).build_global().unwrap();
+
+    
     let now = Instant::now();
     
-    let num_threads = 48;
-
-    take_data(400, 25, 1000, 100, num_threads, String::from("data.txt") );
-
+    take_data::<QuantumCHPState>(40, 2, 
+                                10, 100, 
+                                String::from("data.txt") );
 
     let elapsed = now.elapsed();
     println!("Time: {:.2?}", elapsed);
