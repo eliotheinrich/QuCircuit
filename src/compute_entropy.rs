@@ -2,7 +2,7 @@ use crate::quantum_chp_state::QuantumCHPState;
 use crate::quantum_state::{QuantumState, Entropy};
 use crate::dataframe::DataFrame;
 
-use rayon::ThreadPoolBuilder;
+use rayon::prelude::*;
 use rand::Rng;
 
 pub fn compute_entropy(system_size: usize, subsystem_size: usize, mzr_prob: f32, time: usize) -> f32 {
@@ -55,23 +55,22 @@ fn gen_dataframe(system_size: usize, partition_size: usize, prob: f32, timesteps
 
 pub fn take_data(system_size: usize, num_system_sizes: usize, 
                  timesteps: usize, num_runs: usize, num_threads: usize, filename: String) {
+    rayon::ThreadPoolBuilder::new().num_threads(num_threads).build_global().unwrap();
+    
     let probs: Vec<f32> = vec![0.06, 0.08, 0.1, 0.138, 0.16];
     let partition_sizes: Vec<usize> = (0..system_size/2).step_by(system_size/num_system_sizes).collect();
 
     let num_sizes: usize = partition_sizes.len();
     let num_probs: usize = probs.len();
 
-
-    let mut data: Vec<DataFrame> = Vec::new();
-
-    let pool = ThreadPoolBuilder::new().num_threads(num_threads).build().unwrap();
+    let mut params: Vec<(f32, usize)> = Vec::new();
     for i in 0..num_probs {
         for j in 0..num_sizes {
-			// TODO Multithread gen_dataframes
-			let new_dataframe = pool.install(|| gen_dataframe(system_size, partition_sizes[j], probs[i], timesteps, num_runs);
-            data.push(new_dataframe);
+            params.push((probs[i], partition_sizes[j]));
         }
     }
+
+    let data: Vec<DataFrame> = params.into_par_iter().map(|x| gen_dataframe(system_size, x.1, x.0, timesteps, num_runs)).collect();
 
     println!("done!");
     DataFrame::write_dataframes(&filename, data);

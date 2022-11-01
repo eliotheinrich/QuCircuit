@@ -1,5 +1,4 @@
-#![allow(dead_code)]
-#![allow(unused_assignments)]
+#![allow(warnings)]
 
 pub mod quantum_state;
 pub mod quantum_vector_state;
@@ -133,7 +132,7 @@ pub mod tests {
 	#[test]
 	fn test_simulators() {
 		for i in 0..10 {
-			let circuit = util::generate_random_circuit(&util::gates, 100, 10, 0);
+			let circuit = util::generate_random_circuit(&util::GATES, 100, 10, 0);
 			let mut qc1 = QuantumProgram::<QuantumGraphState>::from_qasm(&circuit);
 			let mut qc2 = QuantumProgram::<QuantumVectorState>::from_qasm(&circuit);
 			qc1.execute();
@@ -159,7 +158,7 @@ pub mod tests {
 		let num_qubits = 5;
 		let num_gates = 100;
 		for i in 0..1000 {
-			let circuit = util::generate_random_circuit(&util::gates, num_gates, num_qubits, 0);
+			let circuit = util::generate_random_circuit(&util::GATES, num_gates, num_qubits, 0);
 			let qubits: Vec<usize> = (0..rng.gen::<usize>()%num_qubits).collect();
 			let mut program1 = QuantumProgram::<QuantumGraphState>::from_qasm(&circuit);
 			let mut program2 = QuantumProgram::<QuantumCHPState>::from_qasm(&circuit);

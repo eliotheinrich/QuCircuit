@@ -3,4 +3,6 @@ target
 .vscode
 __pycache__
 data.txt
+jobs
+*.sl
 
