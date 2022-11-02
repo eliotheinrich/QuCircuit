@@ -3,7 +3,7 @@ use quantum_circuit::quantum_chp_state::QuantumCHPState;
 use std::time::Instant;
 
 fn main() {
-    let num_threads = 48;
+    let num_threads = 4;
     rayon::ThreadPoolBuilder::new().num_threads(num_threads).build_global().unwrap();
 
     
@@ -15,4 +15,5 @@ fn main() {
 
     let elapsed = now.elapsed();
     println!("Time: {:.2?}", elapsed);
+
 }

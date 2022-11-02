@@ -70,7 +70,9 @@ pub fn take_data<Q: QuantumState + Entropy>(system_size: usize, num_system_sizes
         }
     }
 
-    let data: Vec<DataFrame> = params.into_par_iter().map(|x| gen_dataframe::<Q>(system_size, x.1, x.0, timesteps, num_runs)).collect();
+    let data: Vec<DataFrame> = params.into_par_iter().map(|x| {
+                                        gen_dataframe::<Q>(system_size, x.1, x.0, timesteps, num_runs)
+                                   }).collect();
 
     println!("done!");
     DataFrame::write_dataframes(&filename, data);
