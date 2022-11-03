@@ -120,6 +120,7 @@ pub mod util {
 #[cfg(test)]
 pub mod tests {
 	use rand::Rng;
+	use rayon::prelude::*;
 
 	use crate::util;
 
@@ -153,28 +154,34 @@ pub mod tests {
 	}
 
 	#[test]
-	fn test_entropy() {
-		let mut rng = rand::thread_rng();
-		let num_qubits = 5;
+	pub fn test_entropy() {
+		let num_qubits = 6;
 		let num_gates = 100;
-		for i in 0..1000 {
-			let circuit = util::generate_random_circuit(&util::GATES, num_gates, num_qubits, 0);
+		let entropy: Vec<(f32, f32, f32)> = 
+		(0..10).into_par_iter().map(|_| {
+			let mut rng = rand::thread_rng();
+			let circuit = util::generate_brick_wall_circuit(0.1, num_qubits, 100);
+			//util::generate_random_circuit(&util::GATES, num_gates, num_qubits, 0);
 			let qubits: Vec<usize> = (0..rng.gen::<usize>()%num_qubits).collect();
 			let mut program1 = QuantumProgram::<QuantumGraphState>::from_qasm(&circuit);
 			let mut program2 = QuantumProgram::<QuantumCHPState>::from_qasm(&circuit);
+			let mut program3 = QuantumProgram::<QuantumVectorState>::from_qasm(&circuit);
 			program1.execute();
 			program2.execute();
+			program3.execute();
 			
 			let graph_entropy = program1.quantum_state.renyi_entropy(&qubits);
 			let chp_entropy = program2.quantum_state.renyi_entropy(&qubits);
+			let vector_entropy = program3.quantum_state.renyi_entropy(&qubits);
 
-			if (graph_entropy - chp_entropy).abs() > 0.001 {
-				println!("Error: disagreement.");
-				println!("state: {}", program1.print());
-				println!("qubits: {:?}, graph: {}, chp: {}\n\n", qubits, graph_entropy, chp_entropy);
-				panic!();
-			}
+
+			(graph_entropy, chp_entropy, vector_entropy)
+		}).collect();
+		
+		for s in entropy {
+			assert!((s.0 - s.1).abs() < 0.001 && (s.0 - s.2) < 0.001 && (s.1 - s.2).abs() < 0.001); 
 		}
+
 	}
 
 	#[test]
