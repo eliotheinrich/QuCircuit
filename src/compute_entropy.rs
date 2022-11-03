@@ -1,6 +1,6 @@
 use crate::quantum_chp_state::QuantumCHPState;
 use crate::quantum_state::{QuantumState, Entropy};
-use crate::dataframe::DataFrame;
+use crate::dataframe::{DataFrame, DataSlide};
 
 use serde::{Serialize, Deserialize};
 use rand::rngs::ThreadRng;
@@ -80,8 +80,8 @@ pub fn compute_entropy<Q: QuantumState + Entropy>(system_size: usize, subsystem_
 }
 
 
-fn gen_dataframe<Q: QuantumState + Entropy>(system_size: usize, partition_size: usize, prob: f32, timesteps: usize, measurement_freq: usize) -> DataFrame {
-	let mut df: DataFrame = DataFrame::new();
+fn gen_dataslide<Q: QuantumState + Entropy>(system_size: usize, partition_size: usize, prob: f32, timesteps: usize, measurement_freq: usize) -> DataSlide {
+	let mut df: DataSlide = DataSlide::new();
 	df.add_int_param("L", system_size as i32);
 	df.add_int_param("LA", partition_size as i32);
 	df.add_float_param("p", prob);
@@ -111,11 +111,12 @@ pub fn take_data<Q: QuantumState + Entropy>(cfg_filename: &String) {
         }
     }
 
-    let data: Vec<DataFrame> = params.into_par_iter().map(|x| {
-                                        gen_dataframe::<Q>(config.system_size, x.1, x.0, config.timesteps, config.measurement_freq)
+    let slides: Vec<DataSlide> = params.into_par_iter().map(|x| {
+                                        gen_dataslide::<Q>(config.system_size, x.1, x.0, config.timesteps, config.measurement_freq)
                                    }).collect();
 
+    let data: DataFrame = DataFrame::from(slides);
     println!("done!");
-    DataFrame::write_dataframes(&config.filename, data);
+    data.save_json(config.filename);
 }
 

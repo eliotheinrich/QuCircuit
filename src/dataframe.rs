@@ -1,19 +1,48 @@
 use std::collections::HashMap;
 use std::fs;
+use serde::{Serialize, Deserialize};
 
-
+#[derive(Serialize, Deserialize)]
 pub struct DataFrame {
+	slides: Vec<DataSlide>
+}
+
+impl DataFrame {
+	pub fn new() -> Self {
+		return DataFrame { slides: Vec::new() };
+	}
+
+	pub fn from(mut slides: Vec<DataSlide>) -> Self {
+		let mut df = DataFrame::new();
+		for i in 0..slides.len() {
+			df.add_slide(slides.pop().unwrap());
+		}
+		return df;
+	}
+
+	pub fn add_slide(&mut self, slide: DataSlide) {
+		self.slides.push(slide);
+	}
+
+	pub fn save_json(&self, filename: String) {
+		let json = serde_json::to_string(&self).unwrap();
+		fs::write(filename, json);
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct DataSlide {
 	int_params: HashMap<String, i32>,
 	float_params: HashMap<String, f32>,
 	data: HashMap<String, Vec<f32>>,
 }
 
-impl DataFrame {
-	pub fn new() -> DataFrame {
+impl DataSlide {
+	pub fn new() -> DataSlide {
 		let int_params: HashMap<String, i32> = HashMap::new();
 		let float_params: HashMap<String, f32> = HashMap::new();
 		let data: HashMap<String, Vec<f32>> = HashMap::new();
-		return DataFrame { int_params: int_params, float_params: float_params, data: data };
+		return DataSlide { int_params: int_params, float_params: float_params, data: data };
 	}
 
 	pub fn add_int_param(&mut self, key: &str, val: i32) {
@@ -61,13 +90,5 @@ impl DataFrame {
 		}
 
 		return s;
-	}
-
-	pub fn write_dataframes(filename: &str, dataframes: Vec<DataFrame>) {
-		let mut s: String = String::new();
-		for df in &dataframes {
-			s.push_str(&format!("{}\n", df.to_string()));
-		}
-		fs::write(filename, s);
 	}
 }

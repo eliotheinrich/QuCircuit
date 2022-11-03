@@ -4,5 +4,5 @@
 	"mzr_probs": [0.06, 0.08, 0.1, 0.138, 0.16],
 	"timesteps": 50,
 	"measurement_freq": 5,
-	"filename": "data_test.txt"
+	"filename": "data_test.json"
 }
