@@ -43,7 +43,7 @@ class DataFrameCollection:
 
 def load_data(filename):
 	data = DataFrameCollection()
-	with open('data.txt', 'r') as f:
+	with open(filename, 'r') as f:
 		lines = [i.strip() for i in f.readlines()]
 		num_lines = len(lines)
 		for line in lines:
@@ -82,7 +82,7 @@ def plot_all_data(data: DataFrameCollection, steady_state: int = 0, ax = None):
 
 		entropy_avg[i][j] = np.mean(df['entropy'][steady_state:])
 
-	colors = ['blue', 'orange', 'yellow', 'purple', 'green']
+	colors = ['blue', 'orange', 'yellow', 'purple', 'green', 'black', 'magenta', 'cyan']
 	for n,p in enumerate(unique_p):
 		ax.plot(unique_LA, entropy_avg[n], linewidth=1.5, marker='*', color=colors[n], label=f'p = {p}')
 
@@ -90,17 +90,19 @@ def plot_all_data(data: DataFrameCollection, steady_state: int = 0, ax = None):
 	ax.set_xlabel(r'$L_A$', fontsize=16)
 	ax.set_ylabel(r'$\overline{S_A^{(2)}}$', fontsize=16)
 
-data = load_data('data.txt')
+data = load_data('data_other.txt')
 
-unique_p = sorted(list(set(data.get_property('p'))))
-for p in unique_p:
-	p_data = data.query_key('p', 0.08)
-
-	fig, ax = plt.subplots()
-	for i in range(len(p_data.dfs)):
-		plot_run(data, i, 3000, ax)
-	ax.set_title(f'p = {p}', fontsize=16)
-	plt.show()
+#unique_p = sorted(list(set(data.get_property('p'))))
+#for p in unique_p:
+#	p_data = data.query_key('p', 0.08)
+#
+#	fig, ax = plt.subplots()
+#	for i in range(len(p_data.dfs)):
+#		plot_run(data, i, 3000, ax)
+#	ax.set_title(f'p = {p}', fontsize=16)
+#	plt.show()
 
 #plot_run(data, 50, 3000)
-#plot_all_data(data)
+print(f'num samples: {len(data.dfs[0]["entropy"])}')
+plot_all_data(data, steady_state=2000)
+plt.show()
