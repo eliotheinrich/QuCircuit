@@ -207,14 +207,20 @@ pub mod benchmarks {
 
 	pub fn take_data_chp() {
 		println!("{}", time_code("take_data_chp", &|| {
-    		take_data::<QuantumCHPState>(10, 3, 1000, 100, String::from("_data.txt") )
+			let system_size = 10;
+			let partition_sizes: Vec<usize> = vec![1, 3, 5];
+			let probs: Vec<f32> = vec![0.06, 0.08, 0.1, 0.138, 0.16];
+    		take_data::<QuantumCHPState>(10, &partition_sizes, &probs, 1000, 100, String::from("_data.txt") )
 		}));
 	}
 
 
 	pub fn take_data_graph() {
 		println!("{}", time_code("take_data_graph", &|| {
-    		take_data::<QuantumGraphState>(10, 3, 1000, 100, String::from("_data.txt") )
+			let system_size = 10;
+			let partition_sizes: Vec<usize> = vec![1, 3, 5];
+			let probs: Vec<f32> = vec![0.06, 0.08, 0.1, 0.138, 0.16];
+    		take_data::<QuantumGraphState>(10, &partition_sizes, &probs, 1000, 100, String::from("_data.txt") )
 		}));
 	}
 

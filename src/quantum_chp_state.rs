@@ -112,6 +112,10 @@ impl QuantumState for QuantumCHPState {
 		return s;
 	}
 
+	fn system_size(&self) -> usize {
+		return self.num_qubits;
+	}
+
 	fn h_gate(&mut self, qubit: usize) {
 		for i in 0..2*self.num_qubits {
 			let x = self.tableau.x(i, qubit);

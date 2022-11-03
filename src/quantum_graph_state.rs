@@ -561,6 +561,10 @@ impl QuantumState for QuantumGraphState {
 		return format!("Graph:\n{}\nVops:{:?}\n", self.graph.print(), self.graph.vals);
 	}
 
+	fn system_size(&self) -> usize {
+		return self.num_qubits;
+	}
+
     fn x_gate(&mut self, qubit: usize) {
 		assert!(qubit < self.num_qubits);
 		self.apply_gate(qubit, XGATE);

@@ -26,6 +26,8 @@ pub trait QuantumState {
     fn new(num_qubits: usize) -> Self;
     fn print(&self) -> String;
 
+    fn system_size(&self) -> usize;
+
     fn x_gate(&mut self, qubit: usize) {
         self.h_gate(qubit);
         self.z_gate(qubit);

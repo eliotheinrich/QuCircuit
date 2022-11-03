@@ -2,8 +2,26 @@ use crate::quantum_chp_state::QuantumCHPState;
 use crate::quantum_state::{QuantumState, Entropy};
 use crate::dataframe::DataFrame;
 
+use rand::rngs::ThreadRng;
 use rayon::prelude::*;
 use rand::Rng;
+
+fn apply_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offset: bool) {
+    let system_size = quantum_state.system_size();
+    for i in 0..system_size/2 {
+        let mut qubit1 = if offset { (2*i + 1) % system_size } else { 2*i };
+        let mut qubit2 = if offset { (2*i + 2) % system_size } else { (2*i + 1) % system_size };
+        if rng.gen::<u8>() % 2 == 0 {
+            std::mem::swap(&mut qubit1, &mut qubit2);
+        }
+
+        if rng.gen::<u8>() % 2 == 0 {
+            quantum_state.cz_gate(qubit1, qubit2);
+        } else {
+            quantum_state.cx_gate(qubit1, qubit2);
+        }
+    }
+}
 
 pub fn compute_entropy<Q: QuantumState + Entropy>(system_size: usize, subsystem_size: usize, mzr_prob: f32, 
                                                   timesteps: usize, measurement_freq: usize) -> Vec<f32> {
@@ -14,20 +32,12 @@ pub fn compute_entropy<Q: QuantumState + Entropy>(system_size: usize, subsystem_
     let mut entropy: Vec<f32> = Vec::new();
 
     for t in 0..timesteps {
-        for i in 0..system_size/2 { // first layer of unitaries
-            if rng.gen::<u8>() % 2 == 0 {
-                quantum_state.cz_gate(2*i, (2*i + 1) % system_size);
-            } else {
-                quantum_state.cx_gate(2*i, (2*i + 1) % system_size);
-            }
-        }
-        for i in 0..system_size/2 { // second layer of unitaries
-            if rng.gen::<u8>() % 2 == 0 {
-                quantum_state.cz_gate((2*i + 1) % system_size, (2*i + 2) % system_size);
-            } else {
-                quantum_state.cx_gate((2*i + 1) % system_size, (2*i + 2) % system_size);
-            }
-        }
+
+        apply_layer(&mut quantum_state, &mut rng, false);
+        apply_layer(&mut quantum_state, &mut rng, false);
+
+        apply_layer(&mut quantum_state, &mut rng, true);
+        apply_layer(&mut quantum_state, &mut rng, true);
 
         for i in 0..system_size {
             if rng.gen::<f32>() < mzr_prob {
@@ -62,20 +72,16 @@ fn gen_dataframe<Q: QuantumState + Entropy>(system_size: usize, partition_size: 
 
 
 
-pub fn take_data<Q: QuantumState + Entropy>(system_size: usize, num_system_sizes: usize, 
+pub fn take_data<Q: QuantumState + Entropy>(system_size: usize, partition_sizes: &Vec<usize>, mzr_probs: &Vec<f32>, 
                  timesteps: usize, measurement_freq: usize, filename: String) {
     
-    //let probs: Vec<f32> = vec![0.06, 0.08, 0.1, 0.138, 0.16];
-    let probs: Vec<f32> = vec![0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.0138];
-    let partition_sizes: Vec<usize> = (0..system_size/2).step_by(system_size/num_system_sizes).collect();
-
     let num_sizes: usize = partition_sizes.len();
-    let num_probs: usize = probs.len();
+    let num_probs: usize = mzr_probs.len();
 
     let mut params: Vec<(f32, usize)> = Vec::new();
     for i in 0..num_probs {
         for j in 0..num_sizes {
-            params.push((probs[i], partition_sizes[j]));
+            params.push((mzr_probs[i], partition_sizes[j]));
         }
     }
 

@@ -182,6 +182,10 @@ impl QuantumState for QuantumVectorState {
         return s
     }
 
+    fn system_size(&self) -> usize {
+        return self.num_qubits;
+    }
+
     fn x_gate(&mut self, qubit: usize) {
         assert!(qubit < self.num_qubits);
         let bitshift : u64 = 1 << qubit;
