@@ -4,17 +4,8 @@ import matplotlib.pyplot as plt
 import json
 
 class DataSlide:
-	def __init__(self, s):
-		self.data = {}
-		items = s.split('\t')
-		for item in items:
-			key = item.split(':')[0].strip()
-			vals = item.split(':')[1].strip()
-			vals = [float(x) for x in vals.split(' ')]
-			if len(vals) == 1:
-				self.data[key] = vals[0]
-			else:
-				self.data[key] = vals
+	def __init__(self, keys, vals):
+		self.data = dict(zip(keys, vals))
 		
 	def __getitem__(self, key):
 		return self.data[key]
@@ -45,12 +36,19 @@ class DataFrame:
 def load_data(filename):
 	data = DataFrame()
 	with open(filename, 'r') as f:
-		print(json.load(f))
-	with open(filename, 'r') as f:
-		lines = [i.strip() for i in f.readlines()]
-		num_lines = len(lines)
-		for line in lines:
-			data.add_dataframe(DataSlide(line))
+		json_contents = json.load(f)
+		for slide in json_contents['slides']:
+			keys = list(slide['int_params'].keys()) + list(slide['float_params'].keys()) + list(slide['data'].keys())
+			vals = []
+			for key in keys:
+				if key in slide['int_params']:
+					vals.append(slide['int_params'][key])
+				elif key in slide['float_params']:
+					vals.append(slide['float_params'][key])
+				else:
+					vals.append(slide['data'][key])
+				
+			data.add_dataslide(DataSlide(keys, vals))
 	
 	return data
 
@@ -72,18 +70,19 @@ def plot_run(data: DataFrame, run_id: int, average_interval: int = 1, ax = None)
 	ax.set_xlabel(r'$t$', fontsize=16)
 	ax.set_ylabel(r'$S_A^2$', fontsize=16)
 
-def plot_all_data(data: DataFrameCollection, steady_state: int = 0, ax = None):
+def plot_all_data(data: DataFrame, steady_state: int = 0, ax = None):
 	if ax is None:
 		ax = plt.gca()
 
 	unique_p = sorted(list(set(data.get_property('p'))))
 	unique_LA = sorted(list(set(data.get_property('LA'))))
 	entropy_avg = np.zeros((len(unique_p), len(unique_LA)))
-	for df in data.dfs:
-		i = unique_p.index(df['p'])
-		j = unique_LA.index(df['LA'])
+	for slide in data.slides:
+		print(slide.data)
+		i = unique_p.index(slide['p'])
+		j = unique_LA.index(slide['LA'])
 
-		entropy_avg[i][j] = np.mean(df['entropy'][steady_state:])
+		entropy_avg[i][j] = np.mean(slide['entropy'][steady_state:])
 
 	colors = ['blue', 'orange', 'yellow', 'purple', 'green', 'black', 'magenta', 'cyan']
 	for n,p in enumerate(unique_p):
@@ -93,7 +92,7 @@ def plot_all_data(data: DataFrameCollection, steady_state: int = 0, ax = None):
 	ax.set_xlabel(r'$L_A$', fontsize=16)
 	ax.set_ylabel(r'$\overline{S_A^{(2)}}$', fontsize=16)
 
-data = load_data('data_other.txt')
+data = load_data('data_test.json')
 
 #unique_p = sorted(list(set(data.get_property('p'))))
 #for p in unique_p:
@@ -106,6 +105,6 @@ data = load_data('data_other.txt')
 #	plt.show()
 
 #plot_run(data, 50, 3000)
-print(f'num samples: {len(data.dfs[0]["entropy"])}')
-plot_all_data(data, steady_state=2000)
+print(f'num samples: {len(data.slides[0]["entropy"])}')
+plot_all_data(data, steady_state=0)
 plt.show()
