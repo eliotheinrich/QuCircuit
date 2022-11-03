@@ -1,8 +1,9 @@
 from cmath import isclose
 import numpy as np
 import matplotlib.pyplot as plt
+import json
 
-class DataFrame:
+class DataSlide:
 	def __init__(self, s):
 		self.data = {}
 		items = s.split('\t')
@@ -18,40 +19,42 @@ class DataFrame:
 	def __getitem__(self, key):
 		return self.data[key]
 
-class DataFrameCollection:
+class DataFrame:
 	def __init__(self):
-		self.dfs = []
+		self.slides = []
 
-	def add_dataframe(self, df):
-		self.dfs.append(df)
+	def add_dataslide(self, slide):
+		self.slides.append(slide)
 
 	def get_property_with_id(self, key, id):
-		return self.dfs[id][key]
+		return self.slides[id][key]
 
 	def get_property(self, key):
 		val = []
-		for df in self.dfs:
+		for df in self.slides:
 			val.append(df[key])
 		return np.array(val)
 	
 	def query_key(self, key, val):
-		new_dfc = DataFrameCollection()
-		for df in self.dfs:
-			if np.isclose(df[key], val):
-				new_dfc.add_dataframe(df)
-		return new_dfc
+		new_df = DataFrame()
+		for slide in self.slides:
+			if np.isclose(slide[key], val):
+				new_df.add_dataslide(slide)
+		return new_df
 
 def load_data(filename):
-	data = DataFrameCollection()
+	data = DataFrame()
+	with open(filename, 'r') as f:
+		print(json.load(f))
 	with open(filename, 'r') as f:
 		lines = [i.strip() for i in f.readlines()]
 		num_lines = len(lines)
 		for line in lines:
-			data.add_dataframe(DataFrame(line))
+			data.add_dataframe(DataSlide(line))
 	
 	return data
 
-def plot_run(data: DataFrameCollection, run_id: int, average_interval: int = 1, ax = None):
+def plot_run(data: DataFrame, run_id: int, average_interval: int = 1, ax = None):
 	if ax is None:
 		ax = plt.gca()
 
