@@ -2,9 +2,34 @@ use crate::quantum_chp_state::QuantumCHPState;
 use crate::quantum_state::{QuantumState, Entropy};
 use crate::dataframe::DataFrame;
 
+use serde::{Serialize, Deserialize};
 use rand::rngs::ThreadRng;
 use rayon::prelude::*;
 use rand::Rng;
+
+#[derive(Serialize, Deserialize)]
+pub struct EntropyConfig {
+    system_size: usize,
+    partition_sizes: Vec<usize>,
+    mzr_probs: Vec<f32>,
+    timesteps: usize,
+    measurement_freq: usize,
+    filename: String
+}
+
+impl EntropyConfig {
+    pub fn load_json(cfg_filename: &String) -> Self {
+        let data = std::fs::read_to_string(cfg_filename).unwrap();
+        let cfg: EntropyConfig = serde_json::from_str(&data).unwrap();
+        return cfg;
+    }
+
+    pub fn print(&self) {
+        println!("config: \nsystem_size: {}, partition_sizes:: {:?}, mzr_probs: {:?}, timesteps: {}, measurement_freq: {}, filename: {}",
+                  self.system_size, self.partition_sizes, self.mzr_probs, self.timesteps, self.measurement_freq, self.filename);
+    }
+}
+
 
 fn apply_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offset: bool) {
     let system_size = quantum_state.system_size();
@@ -72,24 +97,25 @@ fn gen_dataframe<Q: QuantumState + Entropy>(system_size: usize, partition_size: 
 
 
 
-pub fn take_data<Q: QuantumState + Entropy>(system_size: usize, partition_sizes: &Vec<usize>, mzr_probs: &Vec<f32>, 
-                 timesteps: usize, measurement_freq: usize, filename: String) {
+pub fn take_data<Q: QuantumState + Entropy>(cfg_filename: &String) {
     
-    let num_sizes: usize = partition_sizes.len();
-    let num_probs: usize = mzr_probs.len();
+    let config = EntropyConfig::load_json(cfg_filename);
+    config.print();
+    let num_sizes: usize = config.partition_sizes.len();
+    let num_probs: usize = config.mzr_probs.len();
 
     let mut params: Vec<(f32, usize)> = Vec::new();
     for i in 0..num_probs {
         for j in 0..num_sizes {
-            params.push((mzr_probs[i], partition_sizes[j]));
+            params.push((config.mzr_probs[i], config.partition_sizes[j]));
         }
     }
 
     let data: Vec<DataFrame> = params.into_par_iter().map(|x| {
-                                        gen_dataframe::<Q>(system_size, x.1, x.0, timesteps, measurement_freq)
+                                        gen_dataframe::<Q>(config.system_size, x.1, x.0, config.timesteps, config.measurement_freq)
                                    }).collect();
 
     println!("done!");
-    DataFrame::write_dataframes(&filename, data);
+    DataFrame::write_dataframes(&config.filename, data);
 }
 
