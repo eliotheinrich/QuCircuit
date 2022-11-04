@@ -98,8 +98,9 @@ fn gen_dataslide<Q: QuantumState + Entropy>(system_size: usize, partition_size: 
 
 
 pub fn take_data<Q: QuantumState + Entropy>(cfg_filename: &String) {
-    
-    let config = EntropyConfig::load_json(cfg_filename);
+    let cfg_path: String = String::from("configs/");
+
+    let config: EntropyConfig = EntropyConfig::load_json(&(cfg_path + cfg_filename));
     config.print();
     let num_sizes: usize = config.partition_sizes.len();
     let num_probs: usize = config.mzr_probs.len();
@@ -117,6 +118,7 @@ pub fn take_data<Q: QuantumState + Entropy>(cfg_filename: &String) {
 
     let data: DataFrame = DataFrame::from(slides);
     println!("done!");
-    data.save_json(config.filename);
+    let data_path: String = String::from("data/");
+    data.save_json(data_path + &config.filename);
 }
 
