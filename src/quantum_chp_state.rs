@@ -173,10 +173,9 @@ impl QuantumState for QuantumCHPState {
 	}
 
 	fn mzr_qubit(&mut self, qubit: usize) -> i32 {
-		// TODO
 		let mut found_p: bool = false;
 		let mut p: usize = 0;
-		for i in (self.num_qubits+1)..2*self.num_qubits {
+		for i in (self.num_qubits)..2*self.num_qubits {
 			if self.tableau.x(i, qubit) {
 				found_p = true;
 				p = i;
@@ -213,7 +212,6 @@ impl QuantumState for QuantumCHPState {
 		}
 
 	}
-
 }
 
 fn print_tableau(tableau: &Vec<BitVec>) {
@@ -226,7 +224,7 @@ fn print_tableau(tableau: &Vec<BitVec>) {
 			s.push_str(&format!("{}", if tableau[i][j] { 1 } else { 0 }));
 			if j != cols - 1 { s.push_str(&format!(" ")); }
 		}
-		s.push_str(&format!(" | {}]\n", if true { 1 } else { 0 }));
+		s.push_str(&format!("]\n"));
 	}
 	println!("{s}");
 }
@@ -245,12 +243,12 @@ impl Entropy for QuantumCHPState {
 			}
 		}
 
+
 		// Do Gaussian elimination to determine rank of truncated tableau
 		let mut found_pivot: bool = false;
 		let mut pivot_row: usize = 0;
 		let mut row: usize = 0;
 		let mut leading: usize = 0;
-
 		for c in 0..2*qubits.len() {
 			//println!("on col {c}");
 			//println!("before: ");
@@ -297,8 +295,6 @@ impl Entropy for QuantumCHPState {
 			}
 		}
 
-		//println!("final: ");
-		//print_tableau(&truncated_tableau);
 		return rank as f32 - qubits.len() as f32;
 	}
 }

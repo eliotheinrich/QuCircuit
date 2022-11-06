@@ -635,6 +635,7 @@ impl QuantumState for QuantumGraphState {
 }
 
 impl Entropy for QuantumGraphState {
+	// TODO find bug
 	fn renyi_entropy(&self, qubits: &Vec<usize>) -> f32 {
 		let mut bipartite_graph = self.graph.partition(&qubits);
 		let mut entropy: f32 = 2.*(bipartite_graph.num_vertices as f32)
