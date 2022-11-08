@@ -134,14 +134,14 @@ pub mod benchmarks {
 
 	pub fn take_data_chp() {
 		println!("{}", time_code("take_data_chp", &|| {
-    		take_data::<QuantumCHPState>(&String::from("test_cfg.json"));
+    		take_data(&String::from("test_cfg.json"));
 		}));
 	}
 
 
 	pub fn take_data_graph() {
 		println!("{}", time_code("take_data_graph", &|| {
-    		take_data::<QuantumGraphState>(&String::from("test_cfg.json"));
+    		take_data(&String::from("test_cfg.json"));
 		}));
 	}
 

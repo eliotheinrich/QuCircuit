@@ -109,17 +109,18 @@ impl QuantumVectorState {
                         idx += (self.state[b1].qubit_val(qubits[j]) as usize) * (1 << j);
                         jdx += (self.state[b2].qubit_val(qubits[j]) as usize) * (1 << j);
                     }
-
+                    //println!("adding {:b} and {:b} to rho at {} {}", self.state[b1].bits, self.state[b2].bits, idx, jdx);
 					rho[idx][jdx] += self.state[b1].amp*self.state[b2].amp.conj()
                 }
             }
         }
 
-        let mut tr: Complex<f32> = ZERO;
-        for i in 0..rho.len() {
-            tr += rho[i][i];
-        }
+        //let mut tr: Complex<f32> = ZERO;
+        //for i in 0..rho.len() {
+        //    tr += rho[i][i];
+        //}
 
+        //println!("{:?}", rho);
         return rho;
     }
 }

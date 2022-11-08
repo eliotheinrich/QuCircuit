@@ -3,7 +3,8 @@ use indexmap::set::IndexSet;
 use rand::Rng;
 use rand::rngs::ThreadRng;
 
-use crate::quantum_state::{Entropy, QuantumState};
+use crate::quantum_vector_state::QuantumVectorState;
+use crate::quantum_state::{Entropy, QuantumState, QuantumProgram};
 
 
 const CONJUGATION_TABLE: [usize; 24] = [3, 6, 6, 3, 1, 1, 4, 4, 5, 2, 5, 2, 1, 1, 4, 4, 5, 2, 5, 2, 3, 6, 6, 3];
@@ -25,30 +26,56 @@ const SQRTZDGATE: usize = 23;
 const ZGATES: [usize; 4] = [IDGATE, ZGATE, SGATE, SDGATE];
 
 const CLIFFORD_DECOMPS: [[usize; 5]; 24] =
-   [[IDGATE, IDGATE, IDGATE, IDGATE, IDGATE],
-	[SQRTXGATE, SQRTXGATE, IDGATE, IDGATE, IDGATE],
-	[SQRTZGATE, SQRTZGATE, SQRTXGATE, SQRTXGATE, IDGATE],
-	[SQRTZGATE, SQRTZGATE, IDGATE, IDGATE, IDGATE],
-	[SQRTZGATE, SQRTZGATE, SQRTZGATE, SQRTXGATE, IDGATE],
-	[SQRTZGATE, SQRTXGATE, SQRTXGATE, SQRTXGATE, IDGATE],
-	[SQRTZGATE, SQRTXGATE, SQRTZGATE, SQRTZGATE, IDGATE],
-	[SQRTZGATE, SQRTXGATE, IDGATE, IDGATE, IDGATE],
-	[SQRTXGATE, SQRTXGATE, SQRTXGATE, SQRTZGATE, IDGATE],
-	[SQRTXGATE, SQRTZGATE, IDGATE, IDGATE, IDGATE],
-	[SQRTZGATE, SQRTXGATE, SQRTZGATE, SQRTXGATE, IDGATE],
-	[SQRTXGATE, SQRTZGATE, SQRTZGATE, SQRTZGATE, IDGATE],
+   [[IDGATE, IDGATE, IDGATE, IDGATE,  IDGATE],
+	[SQRTXGATE, SQRTXGATE, IDGATE,    IDGATE,    IDGATE   ],
+	[SQRTZGATE, SQRTZGATE, SQRTXGATE, SQRTXGATE, IDGATE   ],
+	[SQRTZGATE, SQRTZGATE, IDGATE,    IDGATE,    IDGATE   ],
+	[SQRTZGATE, SQRTZGATE, SQRTZGATE, SQRTXGATE, IDGATE   ],
+	[SQRTZGATE, SQRTXGATE, SQRTXGATE, SQRTXGATE, IDGATE   ],
+	[SQRTZGATE, SQRTXGATE, SQRTZGATE, SQRTZGATE, IDGATE   ],
+	[SQRTZGATE, SQRTXGATE, IDGATE,    IDGATE,    IDGATE   ],
+	[SQRTXGATE, SQRTXGATE, SQRTXGATE, SQRTZGATE, IDGATE   ],
+	[SQRTXGATE, SQRTZGATE, IDGATE,    IDGATE,    IDGATE   ],
+	[SQRTZGATE, SQRTXGATE, SQRTZGATE, SQRTXGATE, IDGATE   ],
+	[SQRTXGATE, SQRTZGATE, SQRTZGATE, SQRTZGATE, IDGATE   ],
 	[SQRTXGATE, SQRTZGATE, SQRTZGATE, SQRTZGATE, SQRTXGATE],
 	[SQRTXGATE, SQRTZGATE, SQRTXGATE, SQRTXGATE, SQRTXGATE],
-	[SQRTZGATE, SQRTXGATE, SQRTZGATE, IDGATE, IDGATE],
+	[SQRTZGATE, SQRTXGATE, SQRTZGATE, IDGATE,    IDGATE   ],
 	[SQRTZGATE, SQRTXGATE, SQRTZGATE, SQRTZGATE, SQRTZGATE],
-	[SQRTXGATE, SQRTXGATE, SQRTXGATE, IDGATE, IDGATE],
-	[SQRTXGATE, IDGATE, IDGATE, IDGATE, IDGATE],
-	[SQRTZGATE, SQRTZGATE, SQRTXGATE, IDGATE, IDGATE],
+	[SQRTXGATE, SQRTXGATE, SQRTXGATE, IDGATE,    IDGATE   ],
+	[SQRTXGATE, IDGATE,    IDGATE,    IDGATE,    IDGATE   ],
+	[SQRTZGATE, SQRTZGATE, SQRTXGATE, IDGATE,    IDGATE   ],
 	[SQRTZGATE, SQRTZGATE, SQRTXGATE, SQRTXGATE, SQRTXGATE],
-	[SQRTZGATE, SQRTZGATE, SQRTZGATE, IDGATE, IDGATE],
+	[SQRTZGATE, SQRTZGATE, SQRTZGATE, IDGATE,    IDGATE   ],
 	[SQRTXGATE, SQRTXGATE, SQRTZGATE, SQRTZGATE, SQRTZGATE],
-	[SQRTXGATE, SQRTXGATE, SQRTZGATE, IDGATE, IDGATE],
-	[SQRTZGATE, IDGATE, IDGATE, IDGATE, IDGATE]];
+	[SQRTXGATE, SQRTXGATE, SQRTZGATE, IDGATE,    IDGATE   ],
+	[SQRTZGATE, IDGATE,    IDGATE,    IDGATE,    IDGATE   ]];
+	
+const GATE_DECOMPS: [&str; 24] = [
+	"I",
+	"hssh",
+	"sshssh",
+	"ss",
+	"shsh",
+	"hsshshsh",
+	"sshsshshsh",
+	"ssshsh",
+	"sh",
+	"hsshsh",
+	"sshsshsh",
+	"sssh",
+	"h",
+	"hss",
+	"sshss",
+	"ssh",
+	"shs",
+	"hsshshs",
+	"sshsshshs",
+	"ssshs",
+	"s",
+	"hsshs",
+	"sshsshs",
+	"sss"];
 
 const CLIFFORD_PRODUCTS: [[usize; 24]; 24] = 
    [[ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
@@ -357,7 +384,7 @@ impl<T: std::fmt::Display> Graph<T> {
 
 pub struct QuantumGraphState {
 	num_qubits: usize,
-	graph: Graph<usize>,
+	pub graph: Graph<usize>,
 	rng: ThreadRng,
 }
 
@@ -412,55 +439,56 @@ impl QuantumGraphState {
 	}
 
 	fn mxr_graph(&mut self, qubit: usize, measured: i32) {
-		let qubit_n = self.graph.edges[qubit][0];
+		let a = qubit;
+		let b = self.graph.edges[qubit][0];
 		// Updating VOPs
-		let neighbors_a: BTreeSet<usize> = self.graph.edges[qubit].iter().cloned().collect();
-		let neighbors_b: BTreeSet<usize> = self.graph.edges[qubit_n].iter().cloned().collect();
+		let ngbh_a: BTreeSet<usize> = self.graph.edges[a].iter().cloned().collect();
+		let ngbh_b: BTreeSet<usize> = self.graph.edges[b].iter().cloned().collect();
 
 		if measured == 1 {
-			for n in &neighbors_b {
-				if !(*n == qubit) && neighbors_a.contains(&n) {
-					self.right_apply_gate(*n, ZGATE);
-				}
-			}
 			self.right_apply_gate(qubit, ZGATE);
-			self.right_apply_gate(qubit_n, SQRTYGATE);
-		} else {
-			for n in &neighbors_a {
-				if !(*n == qubit_n) && neighbors_b.contains(&n) {
+			for n in &ngbh_b {
+				if !(*n == qubit) && !ngbh_a.contains(&n) {
 					self.right_apply_gate(*n, ZGATE);
 				}
 			}
-			self.right_apply_gate(qubit_n, SQRTYDGATE);
+			self.right_apply_gate(b, SQRTYGATE);
+		} else {
+			for n in &ngbh_a {
+				if !(*n == b) && !ngbh_b.contains(&n) {
+					self.right_apply_gate(*n, ZGATE);
+				}
+			}
+			self.right_apply_gate(b, SQRTYDGATE);
 		}
 
 		// Updating graph edges
-		for c in &neighbors_a {
-			for d in &neighbors_b {
+		for c in &ngbh_a {
+			for d in &ngbh_b {
 				self.graph.toggle_edge(*c, *d);
 			}
 		}
 
-		for c in &neighbors_a {
-			if neighbors_b.contains(&c) {
-				for d in &neighbors_a {
-					if neighbors_b.contains(&d) {
+		for c in &ngbh_a {
+			if ngbh_b.contains(&c) {
+				for d in &ngbh_a {
+					if ngbh_b.contains(&d) {
 						self.graph.toggle_edge(*c, *d);
 					}
 				}
 			}
 		}
 
-		for d in neighbors_a {
-			if d != qubit_n {
-				self.graph.toggle_edge(qubit_n, d);
+		for d in ngbh_a {
+			if d != b {
+				self.graph.toggle_edge(b, d);
 			}
 		}
 		
 	}
 
 	fn myr_graph(&mut self, qubit: usize, measured: i32) {
-		let gate_id = if measured == 1 { SGATE } else { SDGATE };
+		let gate_id: usize = if measured == 1 { SQRTZDGATE } else { SQRTZGATE };
 
 		// Updating VOPs
 		let neighbors: Vec<usize> = self.graph.edges[qubit].iter().cloned().collect();
@@ -470,7 +498,22 @@ impl QuantumGraphState {
 		self.right_apply_gate(qubit, gate_id);
 
 		// Updating edges
-		self.local_complement(qubit);
+		let mut toggles: Vec<(usize, usize)> = Vec::new();
+		let mut ngbh_a: Vec<usize> = self.graph.edges[qubit].iter().cloned().collect();
+		ngbh_a.push(qubit);
+
+		for i in &ngbh_a {
+			for j in &ngbh_a {
+				if i < j {
+					toggles.push((*i, *j));
+				}
+			}
+		}
+
+
+		for t in &toggles {
+			self.graph.toggle_edge(t.0, t.1);
+		}
 	}
 
 	fn mzr_graph(&mut self, qubit: usize, measured: i32) {
@@ -490,34 +533,14 @@ impl QuantumGraphState {
 		self.right_apply_gate(qubit, HGATE);
 	}
 
+	pub fn gate_decomps_vec() -> Vec<Vec<String>> {
+		let mut gate_decomps: Vec<Vec<String>> = Vec::new();
+		return gate_decomps;
+	}
+
 	pub fn debug_circuit(&self) -> String {
 		let mut circ: String = String::from("@pragma total_num_qubits ") + &self.num_qubits.to_string() + "\n";
 		circ += &(String::from("@pragma total_num_cbits 0\n"));
-		let mut gate_decomps: Vec<Vec<String>> = Vec::new();
-		gate_decomps.push(vec!["".to_string()]);
-        gate_decomps.push(vec!["h".to_string(), "s".to_string(), "s".to_string(), "h".to_string()]);
-        gate_decomps.push(vec!["s".to_string(), "s".to_string(), "h".to_string(), "s".to_string(), "s".to_string(), "h".to_string()]);
-        gate_decomps.push(vec!["s".to_string(), "s".to_string()]);
-        gate_decomps.push(vec!["s".to_string(), "h".to_string(), "s".to_string(), "h".to_string()]);
-        gate_decomps.push(vec!["h".to_string(), "s".to_string(), "s".to_string(), "h".to_string(), "s".to_string(), "h".to_string(), "s".to_string(), "h".to_string()]);
-        gate_decomps.push(vec!["s".to_string(), "s".to_string(), "h".to_string(), "s".to_string(), "s".to_string(), "h".to_string(), "s".to_string(), "h".to_string(), "s".to_string(), "h".to_string()]);
-        gate_decomps.push(vec!["s".to_string(), "s".to_string(), "s".to_string(), "h".to_string(), "s".to_string(), "h".to_string()]);
-        gate_decomps.push(vec!["s".to_string(), "h".to_string()]);
-        gate_decomps.push(vec!["h".to_string(), "s".to_string(), "s".to_string(), "h".to_string(), "s".to_string(), "h".to_string()]);
-        gate_decomps.push(vec!["s".to_string(), "s".to_string(), "h".to_string(), "s".to_string(), "s".to_string(), "h".to_string(), "s".to_string(), "h".to_string()]);
-        gate_decomps.push(vec!["s".to_string(), "s".to_string(), "s".to_string(), "h".to_string()]);
-        gate_decomps.push(vec!["h".to_string()]);
-        gate_decomps.push(vec!["h".to_string(), "s".to_string(), "s".to_string()]);
-        gate_decomps.push(vec!["s".to_string(), "s".to_string(), "h".to_string(), "s".to_string(), "s".to_string()]);
-        gate_decomps.push(vec!["s".to_string(), "s".to_string(), "h".to_string()]);
-        gate_decomps.push(vec!["s".to_string(), "h".to_string(), "s".to_string()]);
-        gate_decomps.push(vec!["h".to_string(), "s".to_string(), "s".to_string(), "h".to_string(), "s".to_string(), "h".to_string(), "s".to_string()]);
-        gate_decomps.push(vec!["s".to_string(), "s".to_string(), "h".to_string(), "s".to_string(), "s".to_string(), "h".to_string(), "s".to_string(), "h".to_string(), "s".to_string()]);
-        gate_decomps.push(vec!["s".to_string(), "s".to_string(), "s".to_string(), "h".to_string(), "s".to_string()]);
-        gate_decomps.push(vec!["s".to_string()]);
-        gate_decomps.push(vec!["h".to_string(), "s".to_string(), "s".to_string(), "h".to_string(), "s".to_string()]);
-        gate_decomps.push(vec!["s".to_string(), "s".to_string(), "h".to_string(), "s".to_string(), "s".to_string(), "h".to_string(), "s".to_string()]);
-        gate_decomps.push(vec!["s".to_string(), "s".to_string(), "s".to_string()]);     
 
 		// Apply initial Hadamards
 		for i in 0..self.num_qubits {
@@ -535,14 +558,21 @@ impl QuantumGraphState {
 
 		// Apply VOPs
 		for i in 0..self.num_qubits {
-			for gate in &gate_decomps[self.graph.vals[i]] {
-				if gate != "" {
+			for gate in GATE_DECOMPS[self.graph.vals[i]].chars() {
+				if gate != 'I' {
 					circ += &String::from(format!("{} q{}\n", gate, i));
 				}
 			}
 		}
 
 		return circ;
+	}
+
+	pub fn to_vector_state(&self) -> QuantumVectorState {
+		let circuit = self.debug_circuit();
+		let mut program = QuantumProgram::<QuantumVectorState>::from_qasm(&circuit);
+		program.execute();
+		return program.quantum_state;
 	}
 }
 
@@ -558,7 +588,19 @@ impl QuantumState for QuantumGraphState {
 	}
 
 	fn print(&self) -> String { 
-		return format!("Graph:\n{}\nVops:{:?}\n", self.graph.print(), self.graph.vals);
+		let mut s: String = String::from("Graph:\n");
+		for i in 0..self.graph.num_vertices {
+			//s.push_str(&format!("[{}] {} -> ", GATE_DECOMPS[self.graph.vals[i]], i));
+			s.push_str(&format!("[{}] {} -> ", self.graph.vals[i], i));
+			for j in &self.graph.edges[i] {
+				s += &String::from(j.to_string() + " ");
+			}
+			if i != self.graph.num_vertices - 1 {
+				s += "\n";
+			}
+		}
+		return s;
+		//return format!("Graph:\n{}\n", self.graph.print());
 	}
 
 	fn system_size(&self) -> usize {

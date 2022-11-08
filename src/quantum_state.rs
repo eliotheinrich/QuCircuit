@@ -16,6 +16,8 @@ const SQRTXGATE: u32 =  12;
 const SQRTXDGATE: u32 = 13;
 const SQRTYGATE: u32 =  14;
 const SQRTYDGATE: u32 = 15;
+const SQRTZGATE: u32 =  16;
+const SQRTZDGATE: u32 = 17;
 
 
 const PRINT: u32 = 100;
@@ -49,6 +51,31 @@ pub trait QuantumState {
         self.s_gate(qubit);
         self.s_gate(qubit);
         self.s_gate(qubit);
+    }
+
+    fn sqrtx_gate(&mut self, qubit: usize) {
+        self.sd_gate(qubit);
+        self.h_gate(qubit);
+        self.sd_gate(qubit);
+    }
+    fn sqrtxd_gate(&mut self, qubit: usize) {
+        self.s_gate(qubit);
+        self.h_gate(qubit);
+        self.s_gate(qubit);
+    }
+    fn sqrty_gate(&mut self, qubit: usize) {
+        self.z_gate(qubit);
+        self.h_gate(qubit);
+    }
+    fn sqrtyd_gate(&mut self, qubit: usize) {
+        self.h_gate(qubit);
+        self.z_gate(qubit);
+    }
+    fn sqrtz_gate(&mut self, qubit: usize) {
+        self.s_gate(qubit);
+    }
+    fn sqrtzd_gate(&mut self, qubit: usize) {
+        self.sd_gate(qubit);
     }
 
     fn cx_gate(&mut self, qubit1: usize, qubit2: usize) {
@@ -214,6 +241,12 @@ impl<Q: QuantumState> QuantumProgram<Q> {
                 YGATE => self.quantum_state.y_gate(inst.qubits[0]),
                 ZGATE => self.quantum_state.z_gate(inst.qubits[0]),
                 HGATE => self.quantum_state.h_gate(inst.qubits[0]),
+                SQRTXGATE => self.quantum_state.sqrtx_gate(inst.qubits[0]),
+                SQRTXDGATE => self.quantum_state.sqrtxd_gate(inst.qubits[0]),
+                SQRTYGATE => self.quantum_state.sqrty_gate(inst.qubits[0]),
+                SQRTYDGATE => self.quantum_state.sqrtyd_gate(inst.qubits[0]),
+                SQRTZGATE => self.quantum_state.sqrtz_gate(inst.qubits[0]),
+                SQRTZDGATE => self.quantum_state.sqrtzd_gate(inst.qubits[0]),
                 CXGATE => self.quantum_state.cx_gate(inst.qubits[0], inst.qubits[1]),
                 CYGATE => self.quantum_state.cy_gate(inst.qubits[0], inst.qubits[1]),
                 CZGATE => self.quantum_state.cz_gate(inst.qubits[0], inst.qubits[1]),

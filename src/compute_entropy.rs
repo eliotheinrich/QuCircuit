@@ -1,4 +1,6 @@
 use crate::quantum_chp_state::QuantumCHPState;
+use crate::quantum_graph_state::QuantumGraphState;
+use crate::quantum_vector_state::QuantumVectorState;
 use crate::quantum_state::{QuantumState, Entropy};
 use crate::dataframe::{DataFrame, DataSlide};
 
@@ -9,6 +11,7 @@ use rand::Rng;
 
 #[derive(Serialize, Deserialize)]
 pub struct EntropyConfig {
+    simulator_type: u8,
     system_size: usize,
     partition_sizes: Vec<usize>,
     mzr_probs: Vec<f32>,
@@ -25,8 +28,8 @@ impl EntropyConfig {
     }
 
     pub fn print(&self) {
-        println!("config: \nsystem_size: {}, partition_sizes:: {:?}, mzr_probs: {:?}, timesteps: {}, measurement_freq: {}, filename: {}",
-                  self.system_size, self.partition_sizes, self.mzr_probs, self.timesteps, self.measurement_freq, self.filename);
+        println!("config: \nsimulator_type: {}, system_size: {}, partition_sizes:: {:?}, mzr_probs: {:?}, timesteps: {}, measurement_freq: {}, filename: {}",
+                  self.simulator_type, self.system_size, self.partition_sizes, self.mzr_probs, self.timesteps, self.measurement_freq, self.filename);
     }
 }
 
@@ -96,8 +99,7 @@ fn gen_dataslide<Q: QuantumState + Entropy>(system_size: usize, partition_size: 
 }
 
 
-
-pub fn take_data<Q: QuantumState + Entropy>(cfg_filename: &String) {
+pub fn take_data(cfg_filename: &String) {
     let cfg_path: String = String::from("configs/");
 
     let config: EntropyConfig = EntropyConfig::load_json(&(cfg_path + cfg_filename));
@@ -112,13 +114,30 @@ pub fn take_data<Q: QuantumState + Entropy>(cfg_filename: &String) {
         }
     }
 
-    let slides: Vec<DataSlide> = params.into_par_iter().map(|x| {
-                                        gen_dataslide::<Q>(config.system_size, x.1, x.0, config.timesteps, config.measurement_freq)
+    let mut slides: Vec<DataSlide> = Vec::new();
+    match config.simulator_type {
+        0 => {
+            slides = params.into_par_iter().map(|x| {
+                                        gen_dataslide::<QuantumCHPState>(config.system_size, x.1, x.0, config.timesteps, config.measurement_freq)
                                    }).collect();
+        } 1 => {
+            slides = params.into_par_iter().map(|x| {
+                                        gen_dataslide::<QuantumGraphState>(config.system_size, x.1, x.0, config.timesteps, config.measurement_freq)
+                                   }).collect();
+        } 2 => {
+            slides = params.into_par_iter().map(|x| {
+                                        gen_dataslide::<QuantumVectorState>(config.system_size, x.1, x.0, config.timesteps, config.measurement_freq)
+                                   }).collect();
+        } _ => {
+            println!("Simulator type not supported!");
+            panic!();
+        }
+    }
 
     let data: DataFrame = DataFrame::from(slides);
-    println!("done!");
-    let data_path: String = String::from("data/");
-    data.save_json(data_path + &config.filename);
+    if !&config.filename.eq(&"_") {
+        let data_path: String = String::from("data/");
+        data.save_json(data_path + &config.filename);
+    }
 }
 
