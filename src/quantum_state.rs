@@ -1,26 +1,30 @@
 use std::collections::HashMap;
 
-const XGATE: u32  =      0;
-const YGATE: u32  =      1;
-const ZGATE: u32  =      2;
-const HGATE: u32  =      3;
-const CXGATE: u32 =      4;
-const CYGATE: u32 =      5;
-const CZGATE: u32 =      6;
-const MXRGATE: u32 =     7;
-const MYRGATE: u32 =     8;
-const MZRGATE: u32 =     9;
-const SGATE: u32 =      10;
-const SDGATE: u32 =     11;
-const SQRTXGATE: u32 =  12;
-const SQRTXDGATE: u32 = 13;
-const SQRTYGATE: u32 =  14;
-const SQRTYDGATE: u32 = 15;
-const SQRTZGATE: u32 =  16;
-const SQRTZDGATE: u32 = 17;
+#[derive(Clone, Copy)]
+enum Gate {
+    I,
+    X,
+    Y,
+    Z,
+    H,
+    CX,
+    CY,
+    CZ,
+    MXR,
+    MYR,
+    MZR,
+    S,
+    Sd,
+    SQRTX,
+    SQRTXd,
+    SQRTY,
+    SQRTYd,
+    SQRTZ,
+    SQRTZd,
+    
+    PRINT,
+}
 
-
-const PRINT: u32 = 100;
 
 pub trait QuantumState {
     // At minimum, a QuantumState must implement the S-gate, the H-gate, 
@@ -116,7 +120,7 @@ pub trait Entropy {
 }
 
 pub struct Instruction {
-    id: u32,
+    id: Gate,
     qubits: Vec<usize>,
     cbits: Vec<usize>
 }
@@ -138,33 +142,33 @@ impl<Q: QuantumState> QuantumProgram<Q> {
         return self.quantum_state.print() + &format!("\nClassical data: {:?}", self.classical_data);
     }
 
-    fn init_mapped_gates() -> HashMap<String, (u32, usize, usize)> {
-        let mut gates: HashMap<String, (u32, usize, usize)> = HashMap::new();
-        gates.insert(String::from("x"), (XGATE, 1, 0)); gates.insert(String::from("X"), (XGATE, 1, 0));
-        gates.insert(String::from("y"), (YGATE, 1, 0)); gates.insert(String::from("Y"), (YGATE, 1, 0));
-        gates.insert(String::from("z"), (ZGATE, 1, 0)); gates.insert(String::from("Z"), (ZGATE, 1, 0));
+    fn init_mapped_gates() -> HashMap<String, (Gate, usize, usize)> {
+        let mut gates: HashMap<String, (Gate, usize, usize)> = HashMap::new();
+        gates.insert(String::from("x"), (Gate::X, 1, 0)); gates.insert(String::from("X"), (Gate::X, 1, 0));
+        gates.insert(String::from("y"), (Gate::Y, 1, 0)); gates.insert(String::from("Y"), (Gate::Y, 1, 0));
+        gates.insert(String::from("z"), (Gate::Z, 1, 0)); gates.insert(String::from("Z"), (Gate::Z, 1, 0));
 
-        gates.insert(String::from("h"), (HGATE, 1, 0)); gates.insert(String::from("H"), (HGATE, 1, 0));
+        gates.insert(String::from("h"), (Gate::H, 1, 0)); gates.insert(String::from("H"), (Gate::H, 1, 0));
         
-        gates.insert(String::from("s"), (SGATE, 1, 0)); gates.insert(String::from("S"), (SGATE, 1, 0));
-        gates.insert(String::from("sd"), (SDGATE, 1, 0)); gates.insert(String::from("SD"), (SDGATE, 1, 0));
+        gates.insert(String::from("s"), (Gate::S, 1, 0)); gates.insert(String::from("S"), (Gate::S, 1, 0));
+        gates.insert(String::from("sd"), (Gate::Sd, 1, 0)); gates.insert(String::from("SD"), (Gate::Sd, 1, 0));
 
-        gates.insert(String::from("sqrtx"), (SQRTXGATE, 1, 0)); gates.insert(String::from("SQRTX"), (SQRTXGATE, 1, 0));
-        gates.insert(String::from("sqrtxd"), (SQRTXDGATE, 1, 0)); gates.insert(String::from("SQRTXD"), (SQRTXDGATE, 1, 0));
-        gates.insert(String::from("sqrty"), (SQRTYGATE, 1, 0)); gates.insert(String::from("SQRTY"), (SQRTYGATE, 1, 0));
-        gates.insert(String::from("sqrtyd"), (SQRTYDGATE, 1, 0)); gates.insert(String::from("SQRTYD"), (SQRTYDGATE, 1, 0));
-        gates.insert(String::from("sqrtz"), (SGATE, 1, 0)); gates.insert(String::from("SQRTZ"), (SGATE, 1, 0));
-        gates.insert(String::from("sqrtzd"), (SDGATE, 1, 0)); gates.insert(String::from("SQRTZD"), (SDGATE, 1, 0));
+        gates.insert(String::from("sqrtx"),  (Gate::SQRTX, 1, 0)); gates.insert(String::from("SQRTX"), (Gate::SQRTX, 1, 0));
+        gates.insert(String::from("sqrtxd"), (Gate::SQRTXd, 1, 0)); gates.insert(String::from("SQRTXD"), (Gate::SQRTXd, 1, 0));
+        gates.insert(String::from("sqrty"),  (Gate::SQRTY, 1, 0)); gates.insert(String::from("SQRTY"), (Gate::SQRTY, 1, 0));
+        gates.insert(String::from("sqrtyd"), (Gate::SQRTYd, 1, 0)); gates.insert(String::from("SQRTYD"), (Gate::SQRTYd, 1, 0));
+        gates.insert(String::from("sqrtz"),  (Gate::S, 1, 0)); gates.insert(String::from("SQRTZ"), (Gate::S, 1, 0));
+        gates.insert(String::from("sqrtzd"), (Gate::Sd, 1, 0)); gates.insert(String::from("SQRTZD"), (Gate::Sd, 1, 0));
 
-        gates.insert(String::from("cx"), (CXGATE, 2, 0)); gates.insert(String::from("CX"), (CXGATE, 2, 0));
-        gates.insert(String::from("cnot"), (CXGATE, 2, 0)); gates.insert(String::from("CNOT"), (CXGATE, 2, 0));
-        gates.insert(String::from("cy"), (CYGATE, 2, 0)); gates.insert(String::from("CY"), (CYGATE, 2, 0));
-        gates.insert(String::from("cz"), (CZGATE, 2, 0)); gates.insert(String::from("CZ"), (CZGATE, 2, 0));
+        gates.insert(String::from("cx"), (Gate::CX, 2, 0)); gates.insert(String::from("CX"), (Gate::CX, 2, 0));
+        gates.insert(String::from("cnot"), (Gate::CX, 2, 0)); gates.insert(String::from("CNOT"), (Gate::CX, 2, 0));
+        gates.insert(String::from("cy"), (Gate::CY, 2, 0)); gates.insert(String::from("CY"), (Gate::CY, 2, 0));
+        gates.insert(String::from("cz"), (Gate::CZ, 2, 0)); gates.insert(String::from("CZ"), (Gate::CZ, 2, 0));
 
 
-        gates.insert(String::from("mxr"), (MXRGATE, 1, 1)); gates.insert(String::from("MXR"), (MXRGATE, 1, 1));
-        gates.insert(String::from("myr"), (MYRGATE, 1, 1)); gates.insert(String::from("MYR"), (MYRGATE, 1, 1));
-        gates.insert(String::from("mzr"), (MZRGATE, 1, 1)); gates.insert(String::from("MZR"), (MZRGATE, 1, 1));
+        gates.insert(String::from("mxr"), (Gate::MXR, 1, 1)); gates.insert(String::from("MXR"), (Gate::MXR, 1, 1));
+        gates.insert(String::from("myr"), (Gate::MYR, 1, 1)); gates.insert(String::from("MYR"), (Gate::MYR, 1, 1));
+        gates.insert(String::from("mzr"), (Gate::MZR, 1, 1)); gates.insert(String::from("MZR"), (Gate::MZR, 1, 1));
 
 
         return gates;
@@ -181,7 +185,7 @@ impl<Q: QuantumState> QuantumProgram<Q> {
         let mut qubits: Vec<usize> = Vec::new();
         let mut cbits: Vec<usize> = Vec::new();
         let mut gate: &str = "";
-        let mut id: u32 = 0;
+        let mut id: Gate = Gate::I;
         let mut instructions: Vec<Instruction> = Vec::new();
 
         let gates = QuantumProgram::<Q>::init_mapped_gates();
@@ -200,7 +204,7 @@ impl<Q: QuantumState> QuantumProgram<Q> {
                     total_num_cbits = line_data[2].parse::<usize>().unwrap();
                     continue;
                 } else if line_data[1] == "print" {
-                    id = PRINT;
+                    id = Gate::PRINT;
                 }
             } else {
                 gate = line_data[0];
@@ -237,27 +241,26 @@ impl<Q: QuantumState> QuantumProgram<Q> {
     pub fn execute(&mut self) {
         for inst in &self.circuit {
             match inst.id {
-                XGATE => self.quantum_state.x_gate(inst.qubits[0]), 
-                YGATE => self.quantum_state.y_gate(inst.qubits[0]),
-                ZGATE => self.quantum_state.z_gate(inst.qubits[0]),
-                HGATE => self.quantum_state.h_gate(inst.qubits[0]),
-                SQRTXGATE => self.quantum_state.sqrtx_gate(inst.qubits[0]),
-                SQRTXDGATE => self.quantum_state.sqrtxd_gate(inst.qubits[0]),
-                SQRTYGATE => self.quantum_state.sqrty_gate(inst.qubits[0]),
-                SQRTYDGATE => self.quantum_state.sqrtyd_gate(inst.qubits[0]),
-                SQRTZGATE => self.quantum_state.sqrtz_gate(inst.qubits[0]),
-                SQRTZDGATE => self.quantum_state.sqrtzd_gate(inst.qubits[0]),
-                CXGATE => self.quantum_state.cx_gate(inst.qubits[0], inst.qubits[1]),
-                CYGATE => self.quantum_state.cy_gate(inst.qubits[0], inst.qubits[1]),
-                CZGATE => self.quantum_state.cz_gate(inst.qubits[0], inst.qubits[1]),
-                MXRGATE => self.classical_data[inst.cbits[0]] = self.quantum_state.mxr_qubit(inst.qubits[0]),
-                MYRGATE => self.classical_data[inst.cbits[0]] = self.quantum_state.myr_qubit(inst.qubits[0]),
-                MZRGATE => self.classical_data[inst.cbits[0]] = self.quantum_state.mzr_qubit(inst.qubits[0]),
-                SGATE => self.quantum_state.s_gate(inst.qubits[0]),
-                SDGATE => self.quantum_state.sd_gate(inst.qubits[0]),
-                PRINT => println!("{}", self.quantum_state.print()),
-                _ => { println!("Unknown gate: {}", inst.id); 
-                       panic!() },
+                Gate::I => (),
+                Gate::X => self.quantum_state.x_gate(inst.qubits[0]), 
+                Gate::Y => self.quantum_state.y_gate(inst.qubits[0]),
+                Gate::Z => self.quantum_state.z_gate(inst.qubits[0]),
+                Gate::H => self.quantum_state.h_gate(inst.qubits[0]),
+                Gate::SQRTX => self.quantum_state.sqrtx_gate(inst.qubits[0]),
+                Gate::SQRTXd => self.quantum_state.sqrtxd_gate(inst.qubits[0]),
+                Gate::SQRTY => self.quantum_state.sqrty_gate(inst.qubits[0]),
+                Gate::SQRTYd => self.quantum_state.sqrtyd_gate(inst.qubits[0]),
+                Gate::SQRTZ => self.quantum_state.sqrtz_gate(inst.qubits[0]),
+                Gate::SQRTZd => self.quantum_state.sqrtzd_gate(inst.qubits[0]),
+                Gate::CX => self.quantum_state.cx_gate(inst.qubits[0], inst.qubits[1]),
+                Gate::CY => self.quantum_state.cy_gate(inst.qubits[0], inst.qubits[1]),
+                Gate::CZ => self.quantum_state.cz_gate(inst.qubits[0], inst.qubits[1]),
+                Gate::MXR => self.classical_data[inst.cbits[0]] = self.quantum_state.mxr_qubit(inst.qubits[0]),
+                Gate::MYR => self.classical_data[inst.cbits[0]] = self.quantum_state.myr_qubit(inst.qubits[0]),
+                Gate::MZR => self.classical_data[inst.cbits[0]] = self.quantum_state.mzr_qubit(inst.qubits[0]),
+                Gate::S => self.quantum_state.s_gate(inst.qubits[0]),
+                Gate::Sd => self.quantum_state.sd_gate(inst.qubits[0]),
+                Gate::PRINT => println!("{}", self.quantum_state.print()),
             };
         }
 

@@ -33,8 +33,13 @@ impl EntropyConfig {
     }
 }
 
+enum Gate {
+    CZ,
+    CX,
+}
 
-fn apply_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offset: bool) {
+
+fn apply_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offset: bool, gate_type: &Gate) {
     let system_size = quantum_state.system_size();
     for i in 0..system_size/2 {
         let mut qubit1 = if offset { (2*i + 1) % system_size } else { 2*i };
@@ -43,11 +48,10 @@ fn apply_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offs
             std::mem::swap(&mut qubit1, &mut qubit2);
         }
 
-        if rng.gen::<u8>() % 2 == 0 {
-            quantum_state.cz_gate(qubit1, qubit2);
-        } else {
-            quantum_state.cx_gate(qubit1, qubit2);
-        }
+        match gate_type {
+            CZ => quantum_state.cz_gate(qubit1, qubit2),
+            CX => quantum_state.cx_gate(qubit1, qubit2),
+        };
     }
 }
 
@@ -61,11 +65,11 @@ pub fn compute_entropy<Q: QuantumState + Entropy>(system_size: usize, subsystem_
 
     for t in 0..timesteps {
 
-        apply_layer(&mut quantum_state, &mut rng, false);
-        apply_layer(&mut quantum_state, &mut rng, false);
+        apply_layer(&mut quantum_state, &mut rng, false, &Gate::CX);
+        apply_layer(&mut quantum_state, &mut rng, false, &Gate::CZ);
 
-        apply_layer(&mut quantum_state, &mut rng, true);
-        apply_layer(&mut quantum_state, &mut rng, true);
+        apply_layer(&mut quantum_state, &mut rng, true, &Gate::CX);
+        apply_layer(&mut quantum_state, &mut rng, true, &Gate::CZ);
 
         for i in 0..system_size {
             if rng.gen::<f32>() < mzr_prob {
