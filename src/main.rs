@@ -24,5 +24,7 @@ fn compute_entropy_run(num_threads: usize, config_filename: &String) {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    compute_entropy_run(1, &args[1])
+    let num_threads = args[1].parse::<usize>().unwrap();
+    let cfg_filename = &args[2];
+    compute_entropy_run(num_threads, cfg_filename)
 }
