@@ -9,7 +9,7 @@ use rand::rngs::ThreadRng;
 use rayon::prelude::*;
 use rand::Rng;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EntropyConfig {
     simulator_type: u8,
     system_size: usize,
@@ -18,6 +18,7 @@ pub struct EntropyConfig {
     timesteps: usize,
     measurement_freq: usize,
     save_state: bool,
+    load_state: bool,
     filename: String
 }
 
@@ -29,8 +30,7 @@ impl EntropyConfig {
     }
 
     pub fn print(&self) {
-        println!("config: \nsimulator_type: {}, system_size: {}, partition_sizes:: {:?}, mzr_probs: {:?}, timesteps: {}, measurement_freq: {}, save_state: {}, filename: {}",
-                  self.simulator_type, self.system_size, self.partition_sizes, self.mzr_probs, self.timesteps, self.measurement_freq, self.save_state, self.filename);
+        println!("{:?}", self);
     }
 }
 
