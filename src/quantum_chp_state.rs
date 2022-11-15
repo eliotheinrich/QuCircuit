@@ -1,9 +1,12 @@
 use bit_vec::BitVec;
-use rand::Rng;
-use rand::rngs::ThreadRng;
+use rand_pcg::Lcg64Xsh32;
+use rand::RngCore;
+use serde::{Serialize, Deserialize};
 
 use crate::quantum_state::{Entropy, QuantumState};
+use crate::dataframe::DataField;
 
+#[derive(Serialize, Deserialize, Clone)]
 struct Tableau {
 	num_qubits: usize,
 	rows: Vec<BitVec>,
@@ -94,15 +97,17 @@ impl Tableau {
 }
 
 
+#[derive(Serialize, Deserialize, Clone)]
 pub struct QuantumCHPState {
 	num_qubits: usize,
 	tableau: Tableau,
-	rng: ThreadRng,
+
+	rng: Lcg64Xsh32,
 }
 
 impl QuantumState for QuantumCHPState {
 	fn new(num_qubits: usize) -> Self {
-		return QuantumCHPState { num_qubits: num_qubits, tableau: Tableau::new(num_qubits), rng: rand::thread_rng() };
+		return QuantumCHPState { num_qubits: num_qubits, tableau: Tableau::new(num_qubits), rng: Lcg64Xsh32::new(10, 10) };
 	}
 
 	fn print(&self) -> String {
@@ -114,6 +119,10 @@ impl QuantumState for QuantumCHPState {
 
 	fn system_size(&self) -> usize {
 		return self.num_qubits;
+	}
+
+	fn to_datafield(&self) -> DataField {
+		return DataField::QuantumCHPState(self.clone());
 	}
 
 	fn h_gate(&mut self, qubit: usize) {
@@ -194,7 +203,7 @@ impl QuantumState for QuantumCHPState {
 			self.tableau.rows[p] = BitVec::from_elem(2*self.num_qubits, false);
 			self.tableau.set_r(p, false);
 			let mut measured: i32 = 0;
-			if self.rng.gen::<u8>() % 2 == 0 {
+			if self.rng.next_u32() % 2 == 0 {
 				measured = 1;
 				self.tableau.set_r(p, true);
 			}

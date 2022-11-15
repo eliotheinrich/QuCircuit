@@ -9,7 +9,7 @@ use rand::rngs::ThreadRng;
 use rayon::prelude::*;
 use rand::Rng;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct EntropyConfig {
     simulator_type: u8,
     system_size: usize,
@@ -17,6 +17,7 @@ pub struct EntropyConfig {
     mzr_probs: Vec<f32>,
     timesteps: usize,
     measurement_freq: usize,
+    save_state: bool,
     filename: String
 }
 
@@ -28,8 +29,8 @@ impl EntropyConfig {
     }
 
     pub fn print(&self) {
-        println!("config: \nsimulator_type: {}, system_size: {}, partition_sizes:: {:?}, mzr_probs: {:?}, timesteps: {}, measurement_freq: {}, filename: {}",
-                  self.simulator_type, self.system_size, self.partition_sizes, self.mzr_probs, self.timesteps, self.measurement_freq, self.filename);
+        println!("config: \nsimulator_type: {}, system_size: {}, partition_sizes:: {:?}, mzr_probs: {:?}, timesteps: {}, measurement_freq: {}, save_state: {}, filename: {}",
+                  self.simulator_type, self.system_size, self.partition_sizes, self.mzr_probs, self.timesteps, self.measurement_freq, self.save_state, self.filename);
     }
 }
 
@@ -49,15 +50,14 @@ fn apply_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offs
         }
 
         match gate_type {
-            CZ => quantum_state.cz_gate(qubit1, qubit2),
-            CX => quantum_state.cx_gate(qubit1, qubit2),
+            Gate::CZ => quantum_state.cz_gate(qubit1, qubit2),
+            Gate::CX => quantum_state.cx_gate(qubit1, qubit2),
         };
     }
 }
 
 pub fn compute_entropy<Q: QuantumState + Entropy>(system_size: usize, subsystem_size: usize, mzr_prob: f32, 
-                                                  timesteps: usize, measurement_freq: usize) -> Vec<f32> {
-    assert!(0. < mzr_prob && mzr_prob < 1.);
+                                                  timesteps: usize, measurement_freq: usize) -> (Q, Vec<f32>) {
     let mut quantum_state: Q = Q::new(system_size);
     let mut rng = rand::thread_rng();
     let qubits: Vec<usize> = (0..subsystem_size).collect();
@@ -83,20 +83,31 @@ pub fn compute_entropy<Q: QuantumState + Entropy>(system_size: usize, subsystem_
 
     }
 
-    return entropy;
+    return (quantum_state, entropy);
 }
 
 
-fn gen_dataslide<Q: QuantumState + Entropy>(system_size: usize, partition_size: usize, prob: f32, timesteps: usize, measurement_freq: usize) -> DataSlide {
+
+fn gen_dataslide<Q: QuantumState + Entropy>(config: EntropyConfig, partition_size: usize, prob: f32) -> DataSlide {
 	let mut df: DataSlide = DataSlide::new();
+
+    let system_size = config.system_size;
+    let timesteps = config.timesteps;
+    let measurement_freq = config.measurement_freq;
+    let save_state = config.save_state;
+
 	df.add_int_param("L", system_size as i32);
 	df.add_int_param("LA", partition_size as i32);
 	df.add_float_param("p", prob);
 	df.add_data("entropy");
 
-    let entropy = compute_entropy::<Q>(system_size, partition_size, prob, timesteps, measurement_freq);
+    let (state, entropy) = compute_entropy::<Q>(system_size, partition_size, prob, timesteps, measurement_freq);
     for s in entropy {
         df.push_data("entropy", s);
+    }
+
+    if save_state {
+        df.add_state("state", state);
     }
 
 	return df;
@@ -122,15 +133,15 @@ pub fn take_data(cfg_filename: &String) {
     match config.simulator_type {
         0 => {
             slides = params.into_par_iter().map(|x| {
-                                        gen_dataslide::<QuantumCHPState>(config.system_size, x.1, x.0, config.timesteps, config.measurement_freq)
+                                        gen_dataslide::<QuantumCHPState>(config.clone(), x.1, x.0)
                                    }).collect();
         } 1 => {
             slides = params.into_par_iter().map(|x| {
-                                        gen_dataslide::<QuantumGraphState>(config.system_size, x.1, x.0, config.timesteps, config.measurement_freq)
+                                        gen_dataslide::<QuantumGraphState>(config.clone(), x.1, x.0)
                                    }).collect();
         } 2 => {
             slides = params.into_par_iter().map(|x| {
-                                        gen_dataslide::<QuantumVectorState>(config.system_size, x.1, x.0, config.timesteps, config.measurement_freq)
+                                        gen_dataslide::<QuantumVectorState>(config.clone(), x.1, x.0)
                                    }).collect();
         } _ => {
             println!("Simulator type not supported!");

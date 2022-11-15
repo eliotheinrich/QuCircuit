@@ -1,11 +1,12 @@
 use std::collections::{BTreeSet, HashMap};
 use indexmap::set::IndexSet;
-use rand::Rng;
-use rand::rngs::ThreadRng;
+use rand_pcg::Lcg64Xsh32;
+use rand::RngCore;
+use serde::{Serialize, Deserialize};
 
 use crate::quantum_vector_state::QuantumVectorState;
 use crate::quantum_state::{Entropy, QuantumState, QuantumProgram};
-
+use crate::dataframe::DataField;
 
 const CONJUGATION_TABLE: [usize; 24] = [3, 6, 6, 3, 1, 1, 4, 4, 5, 2, 5, 2, 1, 1, 4, 4, 5, 2, 5, 2, 3, 6, 6, 3];
 
@@ -252,7 +253,7 @@ const CZ_LOOKUP: [[[(bool, usize, usize); 2]; 24]; 24] =
 
 
 
-
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Graph<T> {
 	num_vertices: usize,
 	vals: Vec<T>,
@@ -382,10 +383,12 @@ impl<T: std::fmt::Display> Graph<T> {
 	}
 }
 
+#[derive(Serialize, Deserialize, Clone)]
 pub struct QuantumGraphState {
 	num_qubits: usize,
 	pub graph: Graph<usize>,
-	rng: ThreadRng,
+
+	rng: Lcg64Xsh32,
 }
 
 impl QuantumGraphState {
@@ -584,7 +587,7 @@ impl QuantumState for QuantumGraphState {
 			graph.add_vertex(HGATE);
 		}
 
-		return QuantumGraphState { num_qubits: num_qubits, graph: graph , rng: rand::thread_rng() };
+		return QuantumGraphState { num_qubits: num_qubits, graph: graph , rng: Lcg64Xsh32::new(10, 10) };
 	}
 
 	fn print(&self) -> String { 
@@ -605,6 +608,10 @@ impl QuantumState for QuantumGraphState {
 
 	fn system_size(&self) -> usize {
 		return self.num_qubits;
+	}
+
+	fn to_datafield(&self) -> DataField {
+		return DataField::QuantumGraphState(self.clone());
 	}
 
     fn x_gate(&mut self, qubit: usize) {
@@ -660,9 +667,9 @@ impl QuantumState for QuantumGraphState {
 				if self.graph.degree(qubit) == 0 {
 					return positive // If measuring in X-basis on isolated vertex, return immediately
 				} else {
-					(self.rng.gen::<u8>() % 2) as i32
+					(self.rng.next_u32() % 2) as i32
 				}
-			} _ => (self.rng.gen::<u8>() % 2) as i32,
+			} _ => (self.rng.next_u32() % 2) as i32,
 		};
 
 		match basis {

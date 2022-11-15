@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use crate::dataframe::DataField;
 
 #[derive(Clone, Copy)]
 enum Gate {
@@ -33,6 +34,8 @@ pub trait QuantumState {
     fn print(&self) -> String;
 
     fn system_size(&self) -> usize;
+
+    fn to_datafield(&self) -> DataField;
 
     fn x_gate(&mut self, qubit: usize) {
         self.h_gate(qubit);

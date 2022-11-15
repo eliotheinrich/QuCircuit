@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 use num::complex::Complex;
-use rand::rngs::ThreadRng;
-use std::f32::consts::SQRT_2;
-use rand::Rng;
+use rand_pcg::Lcg64Xsh32;
+use rand::RngCore;
+use serde::{Serialize, Deserialize};
 
 use crate::quantum_state::{Entropy, QuantumState};
- 
+use crate::dataframe::DataField;
+
+use std::f32::consts::SQRT_2;
 const ZERO : Complex<f32> = Complex::new(0., 0.);
 const ONE : Complex<f32> = Complex::new(1., 0.);
 const I : Complex<f32> = Complex::new(0., 1.);
@@ -16,6 +18,7 @@ const EPS : f32 = 1e-6;
 const HGATE: [Complex<f32>; 4] = [_SQRT2, _SQRT2, _SQRT2, N_SQRT2]; 
 
 
+#[derive(Serialize, Deserialize, Clone)]
 pub struct BasisState {
     bits : u64,
     amp : Complex<f32>
@@ -37,10 +40,12 @@ impl std::cmp::PartialEq for BasisState {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone)]
 pub struct QuantumVectorState {
     pub num_qubits : usize,
     pub state : Vec<BasisState>,
-    rng : ThreadRng,
+
+    rng : Lcg64Xsh32,
 }
 
 impl QuantumVectorState {
@@ -115,11 +120,6 @@ impl QuantumVectorState {
             }
         }
 
-        //let mut tr: Complex<f32> = ZERO;
-        //for i in 0..rho.len() {
-        //    tr += rho[i][i];
-        //}
-
         //println!("{:?}", rho);
         return rho;
     }
@@ -169,7 +169,7 @@ impl QuantumState for QuantumVectorState {
     fn new(num_qubits: usize) -> QuantumVectorState {
         let mut s : Vec<BasisState> = Vec::new();
         s.push(BasisState { bits: 0, amp: ONE });
-        let rng = rand::thread_rng();
+        let rng = Lcg64Xsh32::new(10, 10);
         return QuantumVectorState { num_qubits: num_qubits, state: s, rng: rng };
     }
 
@@ -185,6 +185,10 @@ impl QuantumState for QuantumVectorState {
 
     fn system_size(&self) -> usize {
         return self.num_qubits;
+    }
+
+    fn to_datafield(&self) -> DataField {
+        return DataField::QuantumVectorState(self.clone());
     }
 
     fn x_gate(&mut self, qubit: usize) {
@@ -261,7 +265,7 @@ impl QuantumState for QuantumVectorState {
             };
         }
 
-        let p: f32 = self.rng.gen();
+        let p: f32 = ((self.rng.next_u32() as f64) / (u32::MAX as f64)) as f32;
         let measured: i32 = if p < prob_zero { 0 } else { 1 };
         let norm = if p < prob_zero { prob_zero.sqrt() } else { prob_one.sqrt() };
 
