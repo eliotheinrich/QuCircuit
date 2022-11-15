@@ -6,13 +6,26 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-num = "0.4"
 rand = "0.8.4"
-indexmap = "1.9.1"
-bit-vec = "0.6.3"
 rayon = "1.5.3"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
+
+[dependencies.num]
+version = "0.4"
+features = ["serde"]
+
+[dependencies.indexmap]
+version = "1.9.1"
+features = ["serde"]
+
+[dependencies.bit-vec]
+version = "0.6.3"
+features = ["serde"]
+
+[dependencies.rand_pcg]
+version = "0.3.1"
+features = ["serde1"]
 
 [profile.release]
 debug = true
