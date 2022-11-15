@@ -1,0 +1,10 @@
+{
+	"simulator_type": 1,
+	"system_size": 100,
+	"partition_sizes": [10, 15, 20, 25, 30, 35, 40, 45, 50],
+	"mzr_probs": [0.06, 0.08, 0.1, 0.138, 0.16],
+	"timesteps": 50,
+	"measurement_freq": 5,
+	"save_state": false,
+	"filename": "_"
+}

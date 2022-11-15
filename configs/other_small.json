@@ -1,0 +1,10 @@
+{
+	"simulator_type": 0,
+	"system_size": 100,
+	"partition_sizes": [8, 16, 24, 32, 40, 48],
+	"mzr_probs": [0.01, 0.05, 0.09, 0.13, 0.15],
+	"timesteps": 10000,
+	"measurement_freq": 5,
+	"save_state": true,
+	"filename": "other_small.json"
+}

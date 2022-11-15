@@ -1,0 +1,10 @@
+{
+	"simulator_type": 1,
+	"system_size": 400,
+	"partition_sizes": [8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128, 136, 144, 152, 160, 168, 176, 184, 192, 200],
+	"mzr_probs": [0.06, 0.08, 0.1, 0.138, 0.16],
+	"timesteps": 50000,
+	"measurement_freq": 5,
+	"save_state": true,
+	"filename": "base_graph.json"
+}
