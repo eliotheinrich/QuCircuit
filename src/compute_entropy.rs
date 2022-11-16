@@ -98,6 +98,11 @@ pub fn compute_entropy<Q: QuantumState + Entropy>(mut quantum_state: Q, subsyste
     let qubits: Vec<usize> = (0..subsystem_size).collect();
     let mut entropy: Vec<f32> = Vec::new();
 
+    // Intially polarize in x-direction
+    for i in 0..system_size {
+        quantum_state.h_gate(i);
+    }
+
     for t in 0..timesteps {
 
         apply_layer(&mut quantum_state, &mut rng, false, &Gate::CX);
@@ -136,6 +141,7 @@ fn gen_dataslide(config: EntropyConfig, param: ParamSet) -> DataSlide {
 	dataslide.add_float_param("p", param.get_p());
 	dataslide.add_data("entropy");
 
+    // TODO cleanup
     match param {
         ParamSet::CHP(state, p, LA) => {
             let (state, entropy) = compute_entropy::<QuantumCHPState>(state, LA, p, timesteps, measurement_freq);
@@ -213,7 +219,11 @@ pub fn take_data(cfg_filename: &String) {
 
     let data_filename: String = String::from("data/") + &config.filename;
 
-    let params: Vec<ParamSet> = if config.load_state { get_params_from_file(data_filename.clone()) } else { get_params_from_cfg(config.clone()) };
+    let params: Vec<ParamSet> = if config.load_state { 
+        get_params_from_file(data_filename.clone()) 
+    } else { 
+        get_params_from_cfg(config.clone()) 
+    };
 
     let mut slides: Vec<DataSlide> = params.into_par_iter().map(|param| {
         gen_dataslide(config.clone(), param)
