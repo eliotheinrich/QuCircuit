@@ -20,7 +20,7 @@ pub enum DataField {
 
 #[derive(Serialize, Deserialize)]
 pub struct DataFrame {
-	slides: Vec<DataSlide>
+	pub slides: Vec<DataSlide>
 }
 
 impl DataFrame {
@@ -81,4 +81,32 @@ impl DataSlide {
 		self.data.insert(String::from(key), state.to_datafield());
 	}
 
+	pub fn get_val(&self, key: &str) -> &DataField {
+		return &self.data[key];
+	}
+
+	pub fn contains_key(&self, key: &str) -> bool {
+		return self.data.contains_key(key);
+	}
+
+	pub fn unwrap_int(&self, key: &str) -> i32 {
+		match self.data[key] {
+			DataField::Int(x) => x,
+			_ => panic!()
+		}
+	}
+
+	pub fn unwrap_float(&self, key: &str) -> f32 {
+		match self.data[key] {
+			DataField::Float(x) => x,
+			_ => panic!()
+		}
+	}
+
+	pub fn unwrap_data(&self, key: &str) -> &Vec<f32> {
+		match &self.data[key] {
+			DataField::Data(x) => x,
+			_ => panic!()
+		}
+	}
 }

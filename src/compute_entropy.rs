@@ -2,12 +2,15 @@ use crate::quantum_chp_state::QuantumCHPState;
 use crate::quantum_graph_state::QuantumGraphState;
 use crate::quantum_vector_state::QuantumVectorState;
 use crate::quantum_state::{QuantumState, Entropy};
-use crate::dataframe::{DataFrame, DataSlide};
+use crate::dataframe::{DataFrame, DataSlide, DataField};
 
 use serde::{Serialize, Deserialize};
 use rand::rngs::ThreadRng;
 use rayon::prelude::*;
 use rand::Rng;
+
+const fn _true() -> bool { true }
+const fn _false() -> bool { false }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EntropyConfig {
@@ -17,8 +20,16 @@ pub struct EntropyConfig {
     mzr_probs: Vec<f32>,
     timesteps: usize,
     measurement_freq: usize,
+
+    #[serde(default = "_false")]
     save_state: bool,
+
+    #[serde(default = "_false")]
     load_state: bool,
+
+    #[serde(default = "_true")]
+    save_data: bool, 
+
     filename: String
 }
 
@@ -31,6 +42,30 @@ impl EntropyConfig {
 
     pub fn print(&self) {
         println!("{:?}", self);
+    }
+}
+
+enum ParamSet {
+    CHP(QuantumCHPState, f32, usize),
+    Graph(QuantumGraphState, f32, usize),
+    Vector(QuantumVectorState, f32, usize)
+}
+
+impl ParamSet {
+    pub fn get_p(&self) -> f32 {
+        match self {
+            Self::CHP(_, x, _) => *x,
+            Self::Graph(_, x, _) => *x,
+            Self::Vector(_, x, _) => *x,
+        }
+    }
+
+    pub fn get_partition_size(&self) -> usize {
+        match self {
+            Self::CHP(_, _, x) => *x,
+            Self::Graph(_, _, x) => *x,
+            Self::Vector(_, _, x) => *x,
+        }
     }
 }
 
@@ -56,9 +91,9 @@ fn apply_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offs
     }
 }
 
-pub fn compute_entropy<Q: QuantumState + Entropy>(system_size: usize, subsystem_size: usize, mzr_prob: f32, 
+pub fn compute_entropy<Q: QuantumState + Entropy>(mut quantum_state: Q, subsystem_size: usize, mzr_prob: f32, 
                                                   timesteps: usize, measurement_freq: usize) -> (Q, Vec<f32>) {
-    let mut quantum_state: Q = Q::new(system_size);
+    let system_size = quantum_state.system_size();
     let mut rng = rand::thread_rng();
     let qubits: Vec<usize> = (0..subsystem_size).collect();
     let mut entropy: Vec<f32> = Vec::new();
@@ -88,71 +123,105 @@ pub fn compute_entropy<Q: QuantumState + Entropy>(system_size: usize, subsystem_
 
 
 
-fn gen_dataslide<Q: QuantumState + Entropy>(config: EntropyConfig, partition_size: usize, prob: f32) -> DataSlide {
-	let mut df: DataSlide = DataSlide::new();
+fn gen_dataslide(config: EntropyConfig, param: ParamSet) -> DataSlide {
+	let mut dataslide: DataSlide = DataSlide::new();
 
     let system_size = config.system_size;
     let timesteps = config.timesteps;
     let measurement_freq = config.measurement_freq;
     let save_state = config.save_state;
 
-	df.add_int_param("L", system_size as i32);
-	df.add_int_param("LA", partition_size as i32);
-	df.add_float_param("p", prob);
-	df.add_data("entropy");
+	dataslide.add_int_param("L", system_size as i32);
+	dataslide.add_int_param("LA", param.get_partition_size() as i32);
+	dataslide.add_float_param("p", param.get_p());
+	dataslide.add_data("entropy");
 
-    let (state, entropy) = compute_entropy::<Q>(system_size, partition_size, prob, timesteps, measurement_freq);
-    for s in entropy {
-        df.push_data("entropy", s);
+    match param {
+        ParamSet::CHP(state, p, LA) => {
+            let (state, entropy) = compute_entropy::<QuantumCHPState>(state, LA, p, timesteps, measurement_freq);
+            for s in entropy {
+                dataslide.push_data("entropy", s);
+            }
+            if save_state {
+                dataslide.add_state("state", state);
+            }
+        } ParamSet::Graph(state, p, LA) => {
+            let (state, entropy) = compute_entropy::<QuantumGraphState>(state, LA, p, timesteps, measurement_freq);
+            for s in entropy {
+                dataslide.push_data("entropy", s);
+            }
+            if save_state {
+                dataslide.add_state("state", state);
+            }
+
+        } ParamSet::Vector(state, p, LA) => {
+            let (state, entropy) = compute_entropy::<QuantumVectorState>(state, LA, p, timesteps, measurement_freq);
+            for s in entropy {
+                dataslide.push_data("entropy", s);
+            }
+            if save_state {
+                dataslide.add_state("state", state);
+            }
+        }
     }
 
-    if save_state {
-        df.add_state("state", state);
-    }
-
-	return df;
+	return dataslide;
 }
 
+fn get_params_from_file(data_filename: String) -> Vec<ParamSet> {
+    let mut params: Vec<ParamSet> = Vec::new();
+    let data_json: String = std::fs::read_to_string(data_filename).unwrap();
+    let dataframe: DataFrame = serde_json::from_str(&data_json).unwrap();
+    for slide in dataframe.slides {
+        match slide.get_val("state") {
+            DataField::QuantumCHPState(state) => params.push(ParamSet::CHP(state.clone(), slide.unwrap_float("p"), slide.unwrap_int("LA") as usize)),
+            DataField::QuantumGraphState(state) => params.push(ParamSet::Graph(state.clone(), slide.unwrap_float("p"), slide.unwrap_int("LA") as usize)),
+            DataField::QuantumVectorState(state) => params.push(ParamSet::Vector(state.clone(), slide.unwrap_float("p"), slide.unwrap_int("LA") as usize)),
+            _ => panic!()
+        }
+    }
 
-pub fn take_data(cfg_filename: &String) {
-    let cfg_path: String = String::from("configs/");
+    return params;
+}
 
-    let config: EntropyConfig = EntropyConfig::load_json(&(cfg_path + cfg_filename));
-    config.print();
+fn get_params_from_cfg(config: EntropyConfig) -> Vec<ParamSet> {
     let num_sizes: usize = config.partition_sizes.len();
     let num_probs: usize = config.mzr_probs.len();
 
-    let mut params: Vec<(f32, usize)> = Vec::new();
-    for i in 0..num_probs {
-        for j in 0..num_sizes {
-            params.push((config.mzr_probs[i], config.partition_sizes[j]));
+    let mut params: Vec<ParamSet> = Vec::new();
+    for i in 0..config.mzr_probs.len() {
+        for j in 0..config.partition_sizes.len() {
+            match config.simulator_type {
+                0 => params.push(ParamSet::CHP(QuantumCHPState::new(config.system_size), config.mzr_probs[i], config.partition_sizes[j])),
+                1 => params.push(ParamSet::Graph(QuantumGraphState::new(config.system_size), config.mzr_probs[i], config.partition_sizes[j])),
+                2 => params.push(ParamSet::Vector(QuantumVectorState::new(config.system_size), config.mzr_probs[i], config.partition_sizes[j])),
+                _ => {
+                    println!("Simulator type not supported; must be: \n0: CHP simulator\n1: Graph state simulator\n2: Vector simulator");
+                    panic!();
+                }
+            }
         }
     }
 
-    let mut slides: Vec<DataSlide> = Vec::new();
-    match config.simulator_type {
-        0 => {
-            slides = params.into_par_iter().map(|x| {
-                                        gen_dataslide::<QuantumCHPState>(config.clone(), x.1, x.0)
-                                   }).collect();
-        } 1 => {
-            slides = params.into_par_iter().map(|x| {
-                                        gen_dataslide::<QuantumGraphState>(config.clone(), x.1, x.0)
-                                   }).collect();
-        } 2 => {
-            slides = params.into_par_iter().map(|x| {
-                                        gen_dataslide::<QuantumVectorState>(config.clone(), x.1, x.0)
-                                   }).collect();
-        } _ => {
-            println!("Simulator type not supported!");
-            panic!();
-        }
-    }
+    return params;
+}
 
-    let data: DataFrame = DataFrame::from(slides);
-    if !&config.filename.eq(&"_") {
-        let data_path: String = String::from("data/");
-        data.save_json(data_path + &config.filename);
+pub fn take_data(cfg_filename: &String) {
+    let cfg_path: String = String::from("configs/") + cfg_filename;
+    let config: EntropyConfig = EntropyConfig::load_json(&cfg_path);
+    config.print();
+
+    let data_filename: String = String::from("data/") + &config.filename;
+
+    let params: Vec<ParamSet> = if config.load_state { get_params_from_file(data_filename.clone()) } else { get_params_from_cfg(config.clone()) };
+
+    let mut slides: Vec<DataSlide> = params.into_par_iter().map(|param| {
+        gen_dataslide(config.clone(), param)
+    }).collect();
+
+    let dataframe: DataFrame = DataFrame::from(slides);
+    if config.save_data {
+        dataframe.save_json(data_filename);
     }
 }
 
