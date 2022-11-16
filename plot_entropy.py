@@ -33,20 +33,16 @@ class DataFrame:
 				new_df.add_dataslide(slide)
 		return new_df
 
+def parse_datafield(s):
+	return s[list(s.keys())[0]]
+
 def load_data(filename):
 	data = DataFrame()
 	with open(filename, 'r') as f:
 		json_contents = json.load(f)
 		for slide in json_contents['slides']:
-			keys = list(slide['int_params'].keys()) + list(slide['float_params'].keys()) + list(slide['data'].keys())
-			vals = []
-			for key in keys:
-				if key in slide['int_params']:
-					vals.append(slide['int_params'][key])
-				elif key in slide['float_params']:
-					vals.append(slide['float_params'][key])
-				else:
-					vals.append(slide['data'][key])
+			keys = ['p', 'LA', 'entropy']
+			vals = [parse_datafield(slide['data'][key]) for key in keys]
 				
 			data.add_dataslide(DataSlide(keys, vals))
 	
@@ -78,7 +74,6 @@ def plot_all_data(data: DataFrame, steady_state: int = 0, ax = None):
 	unique_LA = sorted(list(set(data.get_property('LA'))))
 	entropy_avg = np.zeros((len(unique_p), len(unique_LA)))
 	for slide in data.slides:
-		print(slide.data)
 		i = unique_p.index(slide['p'])
 		j = unique_LA.index(slide['LA'])
 
@@ -92,7 +87,7 @@ def plot_all_data(data: DataFrame, steady_state: int = 0, ax = None):
 	ax.set_xlabel(r'$L_A$', fontsize=16)
 	ax.set_ylabel(r'$\overline{S_A^{(2)}}$', fontsize=16)
 
-data = load_data('data_test.json')
+data = load_data('data/base_small.json')
 
 #unique_p = sorted(list(set(data.get_property('p'))))
 #for p in unique_p:
