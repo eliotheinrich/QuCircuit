@@ -41,7 +41,7 @@ def load_data(filename):
 	with open(filename, 'r') as f:
 		json_contents = json.load(f)
 		for slide in json_contents['slides']:
-			keys = ['p', 'LA', 'entropy']
+			keys = ['p', 'LA', 'L', 'entropy']
 			vals = [parse_datafield(slide['data'][key]) for key in keys]
 				
 			data.add_dataslide(DataSlide(keys, vals))
@@ -67,6 +67,7 @@ def plot_run(data: DataFrame, run_id: int, average_interval: int = 1, ax = None)
 	ax.set_ylabel(r'$S_A^2$', fontsize=16)
 
 def plot_all_data(data: DataFrame, steady_state: int = 0, ax = None):
+	assert steady_state < len(data.slides[0]['entropy']), "Steady state longer than total evolution time"
 	if ax is None:
 		ax = plt.gca()
 
@@ -79,27 +80,49 @@ def plot_all_data(data: DataFrame, steady_state: int = 0, ax = None):
 
 		entropy_avg[i][j] = np.mean(slide['entropy'][steady_state:])
 
-	colors = ['blue', 'orange', 'yellow', 'purple', 'green', 'black', 'magenta', 'cyan']
+	colors = ['C0', 'orange', 'yellow', 'purple', 'green', 'black', 'magenta', 'cyan']
 	for n,p in enumerate(unique_p):
-		ax.plot(unique_LA, entropy_avg[n], linewidth=1.5, marker='*', color=colors[n], label=f'p = {p}')
+		if p != 0:
+			ax.plot(unique_LA, entropy_avg[n], linewidth=1.5, marker='*', color=colors[n-1], label=f'p = {p}')
 
 	ax.legend(fontsize=16)
 	ax.set_xlabel(r'$L_A$', fontsize=16)
 	ax.set_ylabel(r'$\overline{S_A^{(2)}}$', fontsize=16)
 
-data = load_data('data/base_small.json')
+def fig2(filenames):
+	data = []
+	for filename in filenames:
+		data.append(load_data(filename))
+	
+	xs = {}
+	Ss = {}
+	for df in data:
+		xs[df.slides[0]['L']] = []
+		Ss[df.slides[0]['L']] = []
+		for slide in df.slides:
+			xs[slide['L']].append(slide['LA'])
+			Ss[slide['L']].append(np.mean(slide['entropy']))
+		xs[df.slides[0]['L']] = np.array(xs[df.slides[0]['L']])
+		Ss[df.slides[0]['L']] = np.array(Ss[df.slides[0]['L']])
+	
+	for L, LA in xs.items():
+		xs[L] = np.log(np.sin(np.pi*LA/L)*L/np.pi)
 
-#unique_p = sorted(list(set(data.get_property('p'))))
-#for p in unique_p:
-#	p_data = data.query_key('p', 0.08)
-#
-#	fig, ax = plt.subplots()
-#	for i in range(len(p_data.dfs)):
-#		plot_run(data, i, 3000, ax)
-#	ax.set_title(f'p = {p}', fontsize=16)
-#	plt.show()
+	for L, logx in xs.items():
+		inds = np.argsort(xs[L])
+		print(Ss[L])
+		plt.plot(xs[L][inds], Ss[L][inds], label=f'L = {L}')
 
-#plot_run(data, 50, 3000)
-print(f'num samples: {len(data.slides[0]["entropy"])}')
-plot_all_data(data, steady_state=0)
-plt.show()
+	plt.xlabel(r'$\log(x)$', fontsize=16)
+	plt.ylabel(r'$\overline{S_A^{(2)}}$', fontsize=16)
+	plt.legend(fontsize=16)
+	plt.show()
+
+
+#data = load_data('data/base_short.json')
+#print(f'num samples: {len(data.slides[0]["entropy"])}')
+#plot_all_data(data, steady_state=0)
+#plt.show()
+
+filenames = ['data/fig2_1.json', 'data/fig2_2.json', 'data/fig2_3.json']
+fig2(filenames)
