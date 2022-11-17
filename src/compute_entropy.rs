@@ -112,7 +112,7 @@ fn apply_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offs
     }
 }
 
-pub fn compute_entropy<Q: QuantumState + Entropy>(quantum_state: &mut Q, subsystem_size: usize, mzr_prob: f32, 
+fn compute_entropy<Q: QuantumState + Entropy>(quantum_state: &mut Q, subsystem_size: usize, mzr_prob: f32, 
                                                   timesteps: usize, measurement_freq: usize) -> (&mut Q, Vec<f32>) {
     let system_size = quantum_state.system_size();
     let mut rng = rand::thread_rng();
@@ -147,7 +147,8 @@ pub fn compute_entropy<Q: QuantumState + Entropy>(quantum_state: &mut Q, subsyst
     return (quantum_state, entropy);
 }
 
-fn save_to_dataslide<Q: QuantumState + Entropy>(dataslide: &mut DataSlide, mut quantum_state: Q, LA: usize, p: f32, timesteps: usize, measurement_freq: usize, save_state: bool) {
+fn save_to_dataslide<Q: QuantumState + Entropy>(dataslide: &mut DataSlide, mut quantum_state: Q, LA: usize, p: f32, timesteps: usize, 
+                                                measurement_freq: usize, save_state: bool) {
     let (state, entropy) = compute_entropy::<Q>(&mut quantum_state, LA, p, timesteps, measurement_freq);
     for s in entropy {
         dataslide.push_data("entropy", s);
@@ -156,9 +157,7 @@ fn save_to_dataslide<Q: QuantumState + Entropy>(dataslide: &mut DataSlide, mut q
     if save_state {
         dataslide.add_state("state", quantum_state);
     }
-
 }
-
 
 fn gen_dataslide(config: EntropyConfig, params: ParamSet) -> DataSlide {
 	let mut dataslide: DataSlide = DataSlide::new();
@@ -177,8 +176,6 @@ fn gen_dataslide(config: EntropyConfig, params: ParamSet) -> DataSlide {
 	dataslide.add_float_param("p", p);
 	dataslide.add_data("entropy");
 
-    let mut entropy: Vec<f32>;
-    // TODO cleanup
     match params.state {
         Simulator::CHP(state) => save_to_dataslide::<QuantumCHPState>(&mut dataslide, state, LA, p, timesteps, measurement_freq, save_state),
         Simulator::Graph(state) => save_to_dataslide::<QuantumGraphState>(&mut dataslide, state, LA, p, timesteps, measurement_freq, save_state),
@@ -234,6 +231,12 @@ fn get_params_from_cfg(config: EntropyConfig) -> Vec<ParamSet> {
     return params;
 }
 
+fn parallel_compute(config: &EntropyConfig, params: Vec<ParamSet>) -> Vec<DataSlide> {
+    return params.into_par_iter().map(|param| {
+        gen_dataslide(config.clone(), param)
+    }).collect();
+}
+
 pub fn take_data(cfg_filename: &String) {
     let cfg_path: String = String::from("configs/") + cfg_filename;
     let config: EntropyConfig = EntropyConfig::load_json(&cfg_path);
@@ -247,9 +250,7 @@ pub fn take_data(cfg_filename: &String) {
         get_params_from_cfg(config.clone()) 
     };
 
-    let mut slides: Vec<DataSlide> = params.into_par_iter().map(|param| {
-        gen_dataslide(config.clone(), param)
-    }).collect();
+    let mut slides: Vec<DataSlide> = parallel_compute(&config, params);
 
     let dataframe: DataFrame = DataFrame::from(slides);
     if config.save_data {
