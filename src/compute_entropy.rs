@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::quantum_chp_state::QuantumCHPState;
 use crate::quantum_graph_state::QuantumGraphState;
 use crate::quantum_vector_state::QuantumVectorState;
@@ -45,29 +47,48 @@ impl EntropyConfig {
     }
 }
 
-enum ParamSet {
-    CHP(QuantumCHPState, f32, usize),
-    Graph(QuantumGraphState, f32, usize),
-    Vector(QuantumVectorState, f32, usize)
+enum Simulator {
+    CHP(QuantumCHPState),
+    Graph(QuantumGraphState),
+    Vector(QuantumVectorState),
+}
+
+enum Param {
+    Int(i32),
+    Float(f32),
+}
+
+impl Param {
+    pub fn unwrap_int(&self) -> i32 {
+        match self {
+            Param::Int(x) => *x,
+            _ => panic!(),
+        }
+    }
+
+    pub fn unwrap_float(&self) -> f32 {
+        match self {
+            Param::Float(x) => *x,
+            _ => panic!(),
+        }
+    }
+}
+
+
+struct ParamSet {
+    pub state: Simulator,
+    params: HashMap<String, Param>,
 }
 
 impl ParamSet {
-    pub fn get_p(&self) -> f32 {
-        match self {
-            Self::CHP(_, x, _) => *x,
-            Self::Graph(_, x, _) => *x,
-            Self::Vector(_, x, _) => *x,
-        }
+    pub fn get_int(&self, key: &str) -> i32 {
+        return self.params[key].unwrap_int();
     }
-
-    pub fn get_partition_size(&self) -> usize {
-        match self {
-            Self::CHP(_, _, x) => *x,
-            Self::Graph(_, _, x) => *x,
-            Self::Vector(_, _, x) => *x,
-        }
+    pub fn get_float(&self, key: &str) -> f32 {
+        return self.params[key].unwrap_float();
     }
 }
+
 
 enum Gate {
     CZ,
@@ -91,8 +112,8 @@ fn apply_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offs
     }
 }
 
-pub fn compute_entropy<Q: QuantumState + Entropy>(mut quantum_state: Q, subsystem_size: usize, mzr_prob: f32, 
-                                                  timesteps: usize, measurement_freq: usize) -> (Q, Vec<f32>) {
+pub fn compute_entropy<Q: QuantumState + Entropy>(quantum_state: &mut Q, subsystem_size: usize, mzr_prob: f32, 
+                                                  timesteps: usize, measurement_freq: usize) -> (&mut Q, Vec<f32>) {
     let system_size = quantum_state.system_size();
     let mut rng = rand::thread_rng();
     let qubits: Vec<usize> = (0..subsystem_size).collect();
@@ -105,11 +126,11 @@ pub fn compute_entropy<Q: QuantumState + Entropy>(mut quantum_state: Q, subsyste
 
     for t in 0..timesteps {
 
-        apply_layer(&mut quantum_state, &mut rng, false, &Gate::CX);
-        apply_layer(&mut quantum_state, &mut rng, false, &Gate::CZ);
+        apply_layer(quantum_state, &mut rng, false, &Gate::CX);
+        apply_layer(quantum_state, &mut rng, false, &Gate::CZ);
 
-        apply_layer(&mut quantum_state, &mut rng, true, &Gate::CX);
-        apply_layer(&mut quantum_state, &mut rng, true, &Gate::CZ);
+        apply_layer(quantum_state, &mut rng, true, &Gate::CX);
+        apply_layer(quantum_state, &mut rng, true, &Gate::CZ);
 
         for i in 0..system_size {
             if rng.gen::<f32>() < mzr_prob {
@@ -126,9 +147,20 @@ pub fn compute_entropy<Q: QuantumState + Entropy>(mut quantum_state: Q, subsyste
     return (quantum_state, entropy);
 }
 
+fn save_to_dataslide<Q: QuantumState + Entropy>(dataslide: &mut DataSlide, mut quantum_state: Q, LA: usize, p: f32, timesteps: usize, measurement_freq: usize, save_state: bool) {
+    let (state, entropy) = compute_entropy::<Q>(&mut quantum_state, LA, p, timesteps, measurement_freq);
+    for s in entropy {
+        dataslide.push_data("entropy", s);
+    }
+
+    if save_state {
+        dataslide.add_state("state", quantum_state);
+    }
+
+}
 
 
-fn gen_dataslide(config: EntropyConfig, param: ParamSet) -> DataSlide {
+fn gen_dataslide(config: EntropyConfig, params: ParamSet) -> DataSlide {
 	let mut dataslide: DataSlide = DataSlide::new();
 
     let system_size = config.system_size;
@@ -136,39 +168,21 @@ fn gen_dataslide(config: EntropyConfig, param: ParamSet) -> DataSlide {
     let measurement_freq = config.measurement_freq;
     let save_state = config.save_state;
 
+    let LA: usize = params.get_int("LA") as usize;
+    let p: f32 = params.get_float("p");
+
+
 	dataslide.add_int_param("L", system_size as i32);
-	dataslide.add_int_param("LA", param.get_partition_size() as i32);
-	dataslide.add_float_param("p", param.get_p());
+	dataslide.add_int_param("LA", LA as i32);
+	dataslide.add_float_param("p", p);
 	dataslide.add_data("entropy");
 
+    let mut entropy: Vec<f32>;
     // TODO cleanup
-    match param {
-        ParamSet::CHP(state, p, LA) => {
-            let (state, entropy) = compute_entropy::<QuantumCHPState>(state, LA, p, timesteps, measurement_freq);
-            for s in entropy {
-                dataslide.push_data("entropy", s);
-            }
-            if save_state {
-                dataslide.add_state("state", state);
-            }
-        } ParamSet::Graph(state, p, LA) => {
-            let (state, entropy) = compute_entropy::<QuantumGraphState>(state, LA, p, timesteps, measurement_freq);
-            for s in entropy {
-                dataslide.push_data("entropy", s);
-            }
-            if save_state {
-                dataslide.add_state("state", state);
-            }
-
-        } ParamSet::Vector(state, p, LA) => {
-            let (state, entropy) = compute_entropy::<QuantumVectorState>(state, LA, p, timesteps, measurement_freq);
-            for s in entropy {
-                dataslide.push_data("entropy", s);
-            }
-            if save_state {
-                dataslide.add_state("state", state);
-            }
-        }
+    match params.state {
+        Simulator::CHP(state) => save_to_dataslide::<QuantumCHPState>(&mut dataslide, state, LA, p, timesteps, measurement_freq, save_state),
+        Simulator::Graph(state) => save_to_dataslide::<QuantumGraphState>(&mut dataslide, state, LA, p, timesteps, measurement_freq, save_state),
+        Simulator::Vector(state) => save_to_dataslide::<QuantumVectorState>(&mut dataslide, state, LA, p, timesteps, measurement_freq, save_state),
     }
 
 	return dataslide;
@@ -179,10 +193,14 @@ fn get_params_from_file(data_filename: String) -> Vec<ParamSet> {
     let data_json: String = std::fs::read_to_string(data_filename).unwrap();
     let dataframe: DataFrame = serde_json::from_str(&data_json).unwrap();
     for slide in dataframe.slides {
+        let mut param_data: HashMap<String, Param> = HashMap::new();
+        param_data.insert(String::from("p"), Param::Float(slide.unwrap_float("p")));
+        param_data.insert(String::from("LA"), Param::Int(slide.unwrap_int("LA")));
+
         match slide.get_val("state") {
-            DataField::QuantumCHPState(state) => params.push(ParamSet::CHP(state.clone(), slide.unwrap_float("p"), slide.unwrap_int("LA") as usize)),
-            DataField::QuantumGraphState(state) => params.push(ParamSet::Graph(state.clone(), slide.unwrap_float("p"), slide.unwrap_int("LA") as usize)),
-            DataField::QuantumVectorState(state) => params.push(ParamSet::Vector(state.clone(), slide.unwrap_float("p"), slide.unwrap_int("LA") as usize)),
+            DataField::QuantumCHPState(state) => params.push(ParamSet { state : Simulator::CHP(state.clone()), params : param_data } ),
+            DataField::QuantumGraphState(state) => params.push(ParamSet { state : Simulator::Graph(state.clone()), params : param_data } ),
+            DataField::QuantumVectorState(state) => params.push(ParamSet { state : Simulator::Vector(state.clone()), params : param_data } ),
             _ => panic!()
         }
     }
@@ -197,10 +215,14 @@ fn get_params_from_cfg(config: EntropyConfig) -> Vec<ParamSet> {
     let mut params: Vec<ParamSet> = Vec::new();
     for i in 0..config.mzr_probs.len() {
         for j in 0..config.partition_sizes.len() {
+            let mut param_data: HashMap<String, Param> = HashMap::new();
+            param_data.insert(String::from("p"), Param::Float(config.mzr_probs[i]));
+            param_data.insert(String::from("LA"), Param::Int(config.partition_sizes[j] as i32));
+
             match config.simulator_type {
-                0 => params.push(ParamSet::CHP(QuantumCHPState::new(config.system_size), config.mzr_probs[i], config.partition_sizes[j])),
-                1 => params.push(ParamSet::Graph(QuantumGraphState::new(config.system_size), config.mzr_probs[i], config.partition_sizes[j])),
-                2 => params.push(ParamSet::Vector(QuantumVectorState::new(config.system_size), config.mzr_probs[i], config.partition_sizes[j])),
+                0 => params.push(ParamSet { state : Simulator::CHP(QuantumCHPState::new(config.system_size)), params : param_data } ),
+                1 => params.push(ParamSet { state : Simulator::Graph(QuantumGraphState::new(config.system_size)), params : param_data } ),
+                2 => params.push(ParamSet { state : Simulator::Vector(QuantumVectorState::new(config.system_size)), params : param_data } ),
                 _ => {
                     println!("Simulator type not supported; must be: \n0: CHP simulator\n1: Graph state simulator\n2: Vector simulator");
                     panic!();
