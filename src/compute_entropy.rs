@@ -112,36 +112,46 @@ fn apply_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offs
     }
 }
 
+fn timestep<Q: QuantumState>(quantum_state: &mut Q, mzr_prob: f32) {
+    let mut rng = rand::thread_rng();
+    apply_layer(quantum_state, &mut rng, false, &Gate::CX);
+    apply_layer(quantum_state, &mut rng, false, &Gate::CZ);
+
+    apply_layer(quantum_state, &mut rng, true, &Gate::CX);
+    apply_layer(quantum_state, &mut rng, true, &Gate::CZ);
+
+    for i in 0..quantum_state.system_size() {
+        if rng.gen::<f32>() < mzr_prob {
+            quantum_state.mzr_qubit(i);
+            quantum_state.h_gate(i);
+        }
+    }
+}
+
+fn polarize<Q: QuantumState>(quantum_state: &mut Q) {
+    for i in 0..quantum_state.system_size() {
+        quantum_state.h_gate(i);
+    }
+}
+
+fn evolve_quantum_state<Q: QuantumState>(quantum_state: &mut Q, mzr_prob: f32, timesteps: usize) {
+    for t in 0..timesteps {
+        timestep(quantum_state, mzr_prob);
+    }
+}
+
 fn compute_entropy<Q: QuantumState + Entropy>(quantum_state: &mut Q, subsystem_size: usize, mzr_prob: f32, 
                                                   timesteps: usize, measurement_freq: usize) -> (&mut Q, Vec<f32>) {
     let system_size = quantum_state.system_size();
-    let mut rng = rand::thread_rng();
     let qubits: Vec<usize> = (0..subsystem_size).collect();
     let mut entropy: Vec<f32> = Vec::new();
 
     // Intially polarize in x-direction
-    for i in 0..system_size {
-        quantum_state.h_gate(i);
-    }
+    polarize(quantum_state);
 
-    for t in 0..timesteps {
-
-        apply_layer(quantum_state, &mut rng, false, &Gate::CX);
-        apply_layer(quantum_state, &mut rng, false, &Gate::CZ);
-
-        apply_layer(quantum_state, &mut rng, true, &Gate::CX);
-        apply_layer(quantum_state, &mut rng, true, &Gate::CZ);
-
-        for i in 0..system_size {
-            if rng.gen::<f32>() < mzr_prob {
-                quantum_state.mzr_qubit(i);
-                quantum_state.h_gate(i);
-            }
-        }
-        if t % measurement_freq == 0 {
-            entropy.push(quantum_state.renyi_entropy(&qubits));
-        }
-
+    for t in 0..timesteps/measurement_freq {
+        evolve_quantum_state(quantum_state, mzr_prob, measurement_freq);
+        entropy.push(quantum_state.renyi_entropy(&qubits));
     }
 
     return (quantum_state, entropy);
@@ -236,6 +246,45 @@ fn parallel_compute(config: &EntropyConfig, params: Vec<ParamSet>) -> Vec<DataSl
         gen_dataslide(config.clone(), param)
     }).collect();
 }
+
+
+
+pub fn time_series() {
+    let L: usize = 800;
+    let LA: usize = L/2;
+    let mzr_prob = 0.138;
+    let num_runs: usize = 10;
+
+    let times: Vec<i32> = (5..1000).step_by(20).collect();
+
+    let mut slides: Vec<DataSlide> = times.into_par_iter().map(|x| {
+        println!("time = {x}");
+        let mut ds: DataSlide = DataSlide::new();
+        ds.add_int_param("t", x);
+        ds.add_int_param("L", L as i32);
+        ds.add_int_param("LA", LA as i32);
+        ds.add_float_param("p", mzr_prob);
+        let mut S: f32 = 0.;
+        let qubits: Vec<usize> = (0..LA).collect();
+
+        for i in 0..num_runs {
+            let mut quantum_state: QuantumCHPState = QuantumCHPState::new(L);
+            polarize(&mut quantum_state);
+            evolve_quantum_state(&mut quantum_state, mzr_prob, x as usize);
+            S += quantum_state.renyi_entropy(&qubits);
+        }
+        S /= num_runs as f32;
+
+        ds.add_float_param("entropy", S);
+        return ds;
+    }).collect();
+
+    let dataframe: DataFrame = DataFrame::from(slides);
+    dataframe.save_json(String::from("data/timeseries.json"));
+    
+
+}
+
 
 pub fn take_data(cfg_filename: &String) {
     let cfg_path: String = String::from("configs/") + cfg_filename;
