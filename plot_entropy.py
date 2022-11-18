@@ -110,9 +110,24 @@ def fig2(filenames):
 
 	for L, logx in xs.items():
 		inds = np.argsort(xs[L])
-		print(Ss[L])
-		plt.plot(xs[L][inds], Ss[L][inds], label=f'L = {L}')
+		xs[L] = xs[L][inds]
+		Ss[L] = Ss[L][inds]
+		p = np.polyfit(xs[L][:20], Ss[L][:20], 1)
+		print(f'{L}: {p}')
+		#plt.plot(xs[L], p[0]*xs[L] + p[1], linestyle='--', label=f'L = {L} fit')
+		plt.plot(xs[L], Ss[L], label=f'L = {L}')
 
+
+	for slide in data[2].slides:
+		if slide['LA'] == 400:
+			St = np.array(slide['entropy'])
+	N = 1000
+
+	#St = np.convolve(St, np.ones(N)/N, mode='valid')
+	t = np.arange(0, 100000, 5)	
+	#t = np.convolve(t, np.ones(N)/N, mode='valid')
+
+#	plt.plot(np.log(t), St)
 	plt.xlabel(r'$\log(x)$', fontsize=16)
 	plt.ylabel(r'$\overline{S_A^{(2)}}$', fontsize=16)
 	plt.legend(fontsize=16)
