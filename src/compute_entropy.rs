@@ -174,9 +174,9 @@ fn polarize<Q: QuantumState>(quantum_state: &mut Q) {
     }
 }
 
-fn evolve_quantum_state<Q: QuantumState>(quantum_state: &mut Q, config: &EntropyConfig) {
-    for t in 0..config.timesteps {
-        timestep(quantum_state, config.mzr_prob);
+fn do_timesteps<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32) {
+    for t in 0..timesteps {
+        timestep(quantum_state, mzr_prob);
     }
 }
 
@@ -191,11 +191,23 @@ fn compute_entropy<'a, Q: QuantumState + Entropy>(quantum_state: &'a mut Q, conf
 
     // Do timesteps
     for t in 0..config.timesteps/config.measurement_freq {
-        evolve_quantum_state(quantum_state, config);
+        do_timesteps(quantum_state, config.measurement_freq, config.mzr_prob);
 
-        if config.space_avg {} // Do space avg
-        else {} // Otherwise just do one computation
-        entropy.push(quantum_state.renyi_entropy(&qubits));
+        let s: f32 = 
+        if config.space_avg {
+            let mut tmp: f32 = 0.;
+            let num_partitions = config.system_size - config.partition_size;
+
+            for i in 0..num_partitions {
+                let offset_qubits: Vec<usize> = qubits.iter().map(|x| x + i).collect();
+                tmp += quantum_state.renyi_entropy(&offset_qubits);
+            }
+            tmp
+        } else {
+            quantum_state.renyi_entropy(&qubits)
+        };
+
+        entropy.push(s);
     }
 
     return (quantum_state, entropy);
@@ -353,6 +365,7 @@ pub fn take_data(cfg_filename: &String) {
     };
 
     let mut slides: Vec<DataSlide> = parallel_compute(configs, states);
+
 
     let dataframe: DataFrame = DataFrame::from(slides);
     if json_config.save_data {

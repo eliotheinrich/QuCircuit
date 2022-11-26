@@ -6,5 +6,6 @@
 	"timesteps": 4000,
 	"measurement_freq": 5,
 	"save_state": true,
+	"space_avg": false,
 	"filename": "base_small.json"
 }
