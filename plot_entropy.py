@@ -41,7 +41,7 @@ def load_data(filename):
 	with open(filename, 'r') as f:
 		json_contents = json.load(f)
 		for slide in json_contents['slides']:
-			keys = ['p', 'LA', 'L', 'entropy']
+			keys = list(slide['data'].keys())
 			vals = [parse_datafield(slide['data'][key]) for key in keys]
 				
 			data.add_dataslide(DataSlide(keys, vals))
@@ -89,7 +89,9 @@ def plot_all_data(data: DataFrame, steady_state: int = 0, ax = None):
 	ax.set_xlabel(r'$L_A$', fontsize=16)
 	ax.set_ylabel(r'$\overline{S_A^{(2)}}$', fontsize=16)
 
-def fig2(filenames):
+def fig2(filenames, ax = None):
+	if ax is None:
+		ax = plt.gca()
 	data = []
 	for filename in filenames:
 		data.append(load_data(filename))
@@ -127,11 +129,10 @@ def fig2(filenames):
 	t = np.arange(0, 100000, 5)	
 	#t = np.convolve(t, np.ones(N)/N, mode='valid')
 
-#	plt.plot(np.log(t), St)
-	plt.xlabel(r'$\log(x)$', fontsize=16)
-	plt.ylabel(r'$\overline{S_A^{(2)}}$', fontsize=16)
-	plt.legend(fontsize=16)
-	plt.show()
+	#ax.plot(np.log(t), St)
+	ax.set_xlabel(r'$\log(x)$', fontsize=16)
+	ax.set_ylabel(r'$\overline{S_A^{(2)}}$', fontsize=16)
+	ax.legend(fontsize=16)
 
 
 #data = load_data('data/base_short.json')
@@ -140,4 +141,18 @@ def fig2(filenames):
 #plt.show()
 
 filenames = ['data/fig2_1.json', 'data/fig2_2.json', 'data/fig2_3.json']
-fig2(filenames)
+ax = plt.gca()
+fig2(filenames, ax)
+timedata = load_data('data/timeseries.json')
+t = []
+S = []
+for slide in timedata.slides:
+	t.append(slide['t'])
+	S.append(np.mean(slide['entropy']))
+
+t, S = np.log(np.array(t)), np.array(S)
+
+ax.plot(t, S)
+ax.set_xlabel(r'$\log(x), \log(t)$', fontsize=16)
+plt.show()
+
