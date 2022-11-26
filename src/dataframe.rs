@@ -77,7 +77,7 @@ impl DataSlide {
 	}
 
 
-	pub fn add_state<Q: QuantumState>(&mut self, key: &str, state: Q) {
+	pub fn add_state<Q: QuantumState>(&mut self, key: &str, state: &Q) {
 		self.data.insert(String::from(key), state.to_datafield());
 	}
 
