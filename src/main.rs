@@ -20,6 +20,7 @@ fn main() {
     let num_threads = args[1].parse::<usize>().unwrap();
     //rayon::ThreadPoolBuilder::new().num_threads(num_threads).build_global().unwrap();
     let cfg_filename = &args[2];
+    
     compute_entropy_run(num_threads, cfg_filename)
     //time_series();
 }
