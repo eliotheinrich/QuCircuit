@@ -82,8 +82,7 @@ def plot_all_data(data: DataFrame, steady_state: int = 0, ax = None):
 
 	colors = ['C0', 'orange', 'yellow', 'purple', 'green', 'black', 'magenta', 'cyan']
 	for n,p in enumerate(unique_p):
-		if p != 0:
-			ax.plot(unique_LA, entropy_avg[n], linewidth=1.5, marker='*', color=colors[n-1], label=f'p = {p}')
+		ax.plot(unique_LA, entropy_avg[n], linewidth=1.5, marker='*', color=colors[n], label=f'p = {p}')
 
 	ax.legend(fontsize=16)
 	ax.set_xlabel(r'$L_A$', fontsize=16)
@@ -120,25 +119,15 @@ def fig2(filenames, ax = None):
 		plt.plot(xs[L], Ss[L], label=f'L = {L}')
 
 
-	for slide in data[2].slides:
-		if slide['partition_size'] == 400:
-			St = np.array(slide['entropy'])
-	N = 1000
-
-	#St = np.convolve(St, np.ones(N)/N, mode='valid')
-	t = np.arange(0, 100000, 5)	
-	#t = np.convolve(t, np.ones(N)/N, mode='valid')
-
-	#ax.plot(np.log(t), St)
 	ax.set_xlabel(r'$\log(x)$', fontsize=16)
 	ax.set_ylabel(r'$\overline{S_A^{(2)}}$', fontsize=16)
 	ax.legend(fontsize=16)
 
 
-#data = load_data('data/base_short.json')
-#print(f'num samples: {len(data.slides[0]["entropy"])}')
-#plot_all_data(data, steady_state=0)
-#plt.show()
+data = load_data('data/base2.json')
+print(f'num samples: {len(data.slides[0]["entropy"])}')
+plot_all_data(data, steady_state=0)
+plt.show()
 
 filenames = ['data/fig2_1.json', 'data/fig2_2.json', 'data/fig2_3.json']
 ax = plt.gca()
@@ -148,9 +137,9 @@ t = []
 S = []
 for slide in timedata.slides:
 	t.append(slide['timesteps'])
-	S.append(np.mean(slide['entropy']))
+	S.append(slide['entropy'])
 
-t, S = np.log(np.array(t)), np.array(S)/400
+t, S = np.log(np.array(t)), np.array(S)
 
 ax.plot(t, S)
 ax.set_xlabel(r'$\log(x), \log(t)$', fontsize=16)
