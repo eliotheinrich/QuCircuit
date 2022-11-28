@@ -1,11 +1,12 @@
 {
 	"simulator_type": 0,
 	"system_sizes": [400],
-	"partition_sizes": [2, 4, 8, 16, 24, 32, 40, 60, 80, 100, 125, 150, 175, 200],
-	"mzr_probs": [0, 0.06, 0.08, 0.1, 0.138, 0.16],
-	"timesteps": [4000],
+	"partition_sizes": [2, 4, 8, 12, 16, 25, 40, 80, 125, 150, 200],
+	"mzr_probs": [0.06, 0.08, 0.1, 0.138, 0.16],
+	"timesteps": [10000],
 	"measurement_freq": 5,
 	"save_state": true,
 	"space_avg": true,
-	"filename": "base.json"
+	"spacing": 5,
+	"filename": "base2.json"
 }

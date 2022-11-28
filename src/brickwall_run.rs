@@ -33,6 +33,8 @@ struct EntropyJSONConfig {
 
     #[serde(default = "_false")]
     space_avg: bool,
+    #[serde(default = "_one")]
+    spacing: usize,
 
     #[serde(default = "_false")]
     save_state: bool,
@@ -71,6 +73,7 @@ struct EntropyConfig {
     num_runs: usize,
     
     space_avg: bool,
+    spacing: usize,
     save_state: bool,
     load_state: bool,
 }
@@ -143,6 +146,7 @@ impl EntropyConfig {
             num_runs: json_config.num_runs,
 
             space_avg: json_config.space_avg,
+            spacing: json_config.spacing,
             save_state: json_config.save_state,
             load_state: json_config.load_state,
         }
@@ -169,9 +173,9 @@ impl EntropyConfig {
             let s: f32 = 
             if self.space_avg {
                 let mut tmp: f32 = 0.;
-                let num_partitions = self.system_size - self.partition_size;
+                let num_partitions = (self.system_size - self.partition_size)/self.spacing;
 
-                for i in 0..num_partitions {
+                for i in (0..num_partitions).step_by(self.spacing) {
                     let offset_qubits: Vec<usize> = qubits.iter().map(|x| x + i).collect();
                     tmp += quantum_state.renyi_entropy(&offset_qubits);
                 }
