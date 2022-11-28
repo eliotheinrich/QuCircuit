@@ -148,7 +148,7 @@ impl EntropyConfig {
         }
     }
 
-    fn compute_entropy<'a, Q: QuantumState + Entropy>(&self, quantum_state: &'a mut Q) -> (&'a mut Q, Vec<f32>) {
+    fn compute_entropy<Q: QuantumState + Entropy>(&self, quantum_state: &mut Q) -> Vec<f32> {
         let system_size = quantum_state.system_size();
         let qubits: Vec<usize> = (0..self.partition_size).collect();
         let mut entropy: Vec<f32> = Vec::new();
@@ -183,17 +183,19 @@ impl EntropyConfig {
             entropy.push(s);
         }
 
-        return (quantum_state, entropy);
+        return entropy;
     }
 
-    fn save_to_dataslide<Q: QuantumState + Entropy>(&self, dataslide: &mut DataSlide, quantum_state: &mut Q) {
-        let (mut state, mut entropy) = self.compute_entropy::<Q>(quantum_state);
-
-        let num_datapoints = entropy.len();
+    fn save_to_dataslide<Q: QuantumState + Entropy + Clone>(&self, dataslide: &mut DataSlide, quantum_state: &mut Q) {
+        let num_datapoints = if self.measurement_freq == 0 { 1 } else { self.timesteps / self.measurement_freq };
+        let mut entropy: Vec<f32> = vec![0.; num_datapoints];
+        let mut state: &Q;
 
         let mut entropy_tmp: Vec<f32> = vec![0.; num_datapoints];
-        for run in 0..(self.num_runs - 1) {
-            (state, entropy_tmp) = self.compute_entropy::<Q>(quantum_state);
+        let init_quantum_state = quantum_state.clone();
+        for run in 0..self.num_runs {
+            if run > 0 { *quantum_state = init_quantum_state.clone() } // If doing multiple runs, reset each time
+            entropy_tmp = self.compute_entropy::<Q>(quantum_state);
             entropy = entropy.iter().zip(entropy_tmp.iter()).map(|(a, b)| a + b).collect();
         }
 

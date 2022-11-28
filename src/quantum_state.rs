@@ -31,6 +31,7 @@ pub trait QuantumState {
     // At minimum, a QuantumState must implement the S-gate, the H-gate, 
     // the CZ-gate, and measurements in the computational basis
     fn new(num_qubits: usize) -> Self;
+    
     fn print(&self) -> String;
 
     fn system_size(&self) -> usize;
