@@ -1,17 +1,15 @@
-use quantum_circuit::compute_entropy::{take_data, time_series};
+use quantum_circuit::brickwall_run::take_data;
 use std::time::Instant;
 
 
 fn compute_entropy_run(num_threads: usize, config_filename: &String) {
-    rayon::ThreadPoolBuilder::new().num_threads(num_threads).build_global().unwrap();
 
     let now = Instant::now();
 
-    take_data(config_filename);
+    take_data(num_threads, config_filename);
 
     let elapsed = now.elapsed();
     println!("Time: {:.2?}", elapsed);
-
 }
 
 

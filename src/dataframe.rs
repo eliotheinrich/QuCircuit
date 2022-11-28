@@ -8,6 +8,8 @@ use crate::{quantum_state::QuantumState,
 
 use rayon::prelude::*;
 
+
+// Code for managing output data in runs
 #[derive(Serialize, Deserialize)]
 pub enum DataField {
 	Int(i32),
@@ -109,4 +111,43 @@ impl DataSlide {
 			_ => panic!()
 		}
 	}
+}
+
+// Code for managing parallel computation of many configurable runs
+pub enum Simulator {
+    None,
+    CHP(QuantumCHPState),
+    Graph(QuantumGraphState),
+    Vector(QuantumVectorState),
+}
+
+pub trait RunConfig {
+    fn init_state(&self) -> Simulator;
+    fn gen_dataslide(&self, sim: Simulator) -> DataSlide;
+}
+
+pub struct ParallelCompute<C: RunConfig + std::marker::Sync> {
+    num_threads: usize,
+    configs: Vec<C>,
+
+    initialized: bool,
+}
+
+impl<C: RunConfig + std::marker::Sync> ParallelCompute<C> {
+    pub fn new(num_threads: usize, configs: Vec<C>) -> Self {
+        Self { num_threads: num_threads, configs: configs, initialized: false }
+    }
+
+    pub fn compute(&self) -> DataFrame {
+        if !self.initialized {
+            rayon::ThreadPoolBuilder::new().num_threads(self.num_threads).build_global().unwrap();
+        }
+
+        let slides: Vec<DataSlide> = (0..self.configs.len()).into_par_iter().map(|i| {
+            let mut state: Simulator = self.configs[i].init_state();
+            self.configs[i].gen_dataslide(state)
+        }).collect();
+
+        return DataFrame::from(slides);
+    }
 }

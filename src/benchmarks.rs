@@ -1,5 +1,5 @@
 
-use crate::compute_entropy::take_data;
+use crate::brickwall_run::take_data;
 use crate::quantum_chp_state::QuantumCHPState;
 use crate::quantum_graph_state::QuantumGraphState;
 
@@ -14,13 +14,13 @@ fn time_code(func_name: &str, func: &dyn Fn() -> ()) -> String {
 
 pub fn take_data_chp() {
 	println!("{}", time_code("take_data_chp", &|| {
-		take_data(&String::from("test_cfg.json"));
+		take_data(4, &String::from("test_cfg.json"));
 	}));
 }
 
 
 pub fn take_data_graph() {
 	println!("{}", time_code("take_data_graph", &|| {
-		take_data(&String::from("test_cfg.json"));
+		take_data(4, &String::from("test_cfg.json"));
 	}));
 }
