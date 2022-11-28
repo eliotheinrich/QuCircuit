@@ -71,12 +71,12 @@ def plot_all_data(data: DataFrame, steady_state: int = 0, ax = None):
 	if ax is None:
 		ax = plt.gca()
 
-	unique_p = sorted(list(set(data.get_property('p'))))
-	unique_LA = sorted(list(set(data.get_property('LA'))))
+	unique_p = sorted(list(set(data.get_property('mzr_prob'))))
+	unique_LA = sorted(list(set(data.get_property('partition_size'))))
 	entropy_avg = np.zeros((len(unique_p), len(unique_LA)))
 	for slide in data.slides:
-		i = unique_p.index(slide['p'])
-		j = unique_LA.index(slide['LA'])
+		i = unique_p.index(slide['mzr_prob'])
+		j = unique_LA.index(slide['partition_size'])
 
 		entropy_avg[i][j] = np.mean(slide['entropy'][steady_state:])
 
@@ -99,13 +99,13 @@ def fig2(filenames, ax = None):
 	xs = {}
 	Ss = {}
 	for df in data:
-		xs[df.slides[0]['L']] = []
-		Ss[df.slides[0]['L']] = []
+		xs[df.slides[0]['system_size']] = []
+		Ss[df.slides[0]['system_size']] = []
 		for slide in df.slides:
-			xs[slide['L']].append(slide['LA'])
-			Ss[slide['L']].append(np.mean(slide['entropy']))
-		xs[df.slides[0]['L']] = np.array(xs[df.slides[0]['L']])
-		Ss[df.slides[0]['L']] = np.array(Ss[df.slides[0]['L']])
+			xs[slide['system_size']].append(slide['partition_size'])
+			Ss[slide['system_size']].append(np.mean(slide['entropy']))
+		xs[df.slides[0]['system_size']] = np.array(xs[df.slides[0]['system_size']])
+		Ss[df.slides[0]['system_size']] = np.array(Ss[df.slides[0]['system_size']])
 	
 	for L, LA in xs.items():
 		xs[L] = np.log(np.sin(np.pi*LA/L)*L/np.pi)
@@ -121,7 +121,7 @@ def fig2(filenames, ax = None):
 
 
 	for slide in data[2].slides:
-		if slide['LA'] == 400:
+		if slide['partition_size'] == 400:
 			St = np.array(slide['entropy'])
 	N = 1000
 
@@ -147,10 +147,10 @@ timedata = load_data('data/timeseries.json')
 t = []
 S = []
 for slide in timedata.slides:
-	t.append(slide['t'])
+	t.append(slide['timesteps'])
 	S.append(np.mean(slide['entropy']))
 
-t, S = np.log(np.array(t)), np.array(S)
+t, S = np.log(np.array(t)), np.array(S)/400
 
 ax.plot(t, S)
 ax.set_xlabel(r'$\log(x), \log(t)$', fontsize=16)
