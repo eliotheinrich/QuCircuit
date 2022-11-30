@@ -18,6 +18,8 @@ const fn _one() -> usize { 1 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct EntropyJSONConfig {
+    run_name: String,
+
     simulator_type: u8,
 
     system_sizes: Vec<usize>,
@@ -60,7 +62,6 @@ impl EntropyJSONConfig {
     }
 }
 
-
 struct EntropyConfig {
     simulator_type: u8,
 
@@ -78,12 +79,10 @@ struct EntropyConfig {
     load_state: bool,
 }
 
-
 enum Gate {
     CZ,
     CX,
 }
-
 
 fn apply_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offset: bool, gate_type: &Gate) {
     let system_size = quantum_state.system_size();
@@ -172,11 +171,11 @@ impl EntropyConfig {
 
             let s: f32 = 
             if self.space_avg {
-                let mut tmp: f32 = 0.;
                 let num_partitions = (self.system_size - self.partition_size)/self.spacing;
 
-                for i in (0..num_partitions).step_by(self.spacing) {
-                    let offset_qubits: Vec<usize> = qubits.iter().map(|x| x + i).collect();
+                let mut tmp: f32 = 0.;
+                for i in 0..num_partitions {
+                    let offset_qubits: Vec<usize> = qubits.iter().map(|x| x + i*self.spacing).collect();
                     tmp += quantum_state.renyi_entropy(&offset_qubits);
                 }
                 tmp/(num_partitions as f32)
@@ -198,7 +197,7 @@ impl EntropyConfig {
         let mut entropy_tmp: Vec<f32> = vec![0.; num_datapoints];
         let init_quantum_state = quantum_state.clone();
         for run in 0..self.num_runs {
-            if run > 0 { *quantum_state = init_quantum_state.clone() } // If doing multiple runs, reset each time
+            *quantum_state = init_quantum_state.clone(); // Reinitialize state
             entropy_tmp = self.compute_entropy::<Q>(quantum_state);
             entropy = entropy.iter().zip(entropy_tmp.iter()).map(|(a, b)| a + b).collect();
         }
@@ -282,6 +281,7 @@ fn load_json_config(json_config: &EntropyJSONConfig) -> Vec<EntropyConfig> {
         }
     }
 
+    println!("Producing {} configs", configs.len());
     return configs;
 }
 
@@ -309,14 +309,14 @@ pub fn take_data(num_threads: usize, cfg_filename: &String) {
     let json_config: EntropyJSONConfig = EntropyJSONConfig::load_json(&cfg_path);
     json_config.print();
 
-    let data_filename: String = String::from("data/") + &json_config.filename;
 
     let configs: Vec<EntropyConfig> = load_json_config(&json_config);
 
-    let mut pc: ParallelCompute<EntropyConfig> = ParallelCompute::new(num_threads, configs);
+    let mut pc = ParallelCompute::new(num_threads, configs);
     let dataframe = pc.compute();
-
+    
     if json_config.save_data {
+        let data_filename: String = String::from("data/") + &json_config.filename;
         dataframe.save_json(data_filename);
     }
 }

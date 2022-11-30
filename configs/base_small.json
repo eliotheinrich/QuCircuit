@@ -1,4 +1,5 @@
 {
+	"run_name": "base_small",
 	"simulator_type": 0,
 	"system_sizes": [100],
 	"partition_sizes": [8, 16, 24, 32, 40, 48],

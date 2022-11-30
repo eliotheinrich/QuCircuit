@@ -1,4 +1,5 @@
 {
+	"run_name": "timeseries",
 	"simulator_type": 0,
 	"system_sizes": [800],
 	"partition_sizes": [400],
