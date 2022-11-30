@@ -1,7 +1,7 @@
-from cmath import isclose
 import numpy as np
 import matplotlib.pyplot as plt
 import json
+from scipy.optimize import curve_fit
 
 class DataSlide:
 	def __init__(self, keys, vals):
@@ -82,13 +82,17 @@ def plot_all_data(data: DataFrame, steady_state: int = 0, ax = None):
 
 	colors = ['C0', 'orange', 'yellow', 'purple', 'green', 'black', 'magenta', 'cyan']
 	for n,p in enumerate(unique_p):
-		ax.plot(unique_LA, entropy_avg[n], linewidth=1.5, marker='*', color=colors[n], label=f'p = {p}')
+		if p != 0:
+			ax.plot(unique_LA, entropy_avg[n], linewidth=1.5, marker='*', color=colors[n-1 if 0 in unique_p else n], label=f'p = {p}')
 
 	ax.legend(fontsize=16)
 	ax.set_xlabel(r'$L_A$', fontsize=16)
 	ax.set_ylabel(r'$\overline{S_A^{(2)}}$', fontsize=16)
 
-def fig2(filenames, ax = None):
+def linear(x, a, b):
+	return x*a + b
+
+def fig2(filenames, steady_state = 0, ax = None, linear_fit = False):
 	if ax is None:
 		ax = plt.gca()
 	data = []
@@ -100,9 +104,10 @@ def fig2(filenames, ax = None):
 	for df in data:
 		xs[df.slides[0]['system_size']] = []
 		Ss[df.slides[0]['system_size']] = []
+		num_samples = len(df.slides[0]['entropy'])
 		for slide in df.slides:
 			xs[slide['system_size']].append(slide['partition_size'])
-			Ss[slide['system_size']].append(np.mean(slide['entropy']))
+			Ss[slide['system_size']].append(np.mean(slide['entropy'][steady_state:]))
 		xs[df.slides[0]['system_size']] = np.array(xs[df.slides[0]['system_size']])
 		Ss[df.slides[0]['system_size']] = np.array(Ss[df.slides[0]['system_size']])
 	
@@ -113,9 +118,12 @@ def fig2(filenames, ax = None):
 		inds = np.argsort(xs[L])
 		xs[L] = xs[L][inds]
 		Ss[L] = Ss[L][inds]
-		p = np.polyfit(xs[L][:20], Ss[L][:20], 1)
-		print(f'{L}: {p}')
-		#plt.plot(xs[L], p[0]*xs[L] + p[1], linestyle='--', label=f'L = {L} fit')
+
+		if linear_fit:
+			fit_ind = 10
+			p = curve_fit(linear, xs[L][fit_ind:], Ss[L][fit_ind:])[0]
+			plt.plot(xs[L][fit_ind:], p[0]*xs[L][fit_ind:] + p[1], linestyle='--', label=f'L = {L} fit')
+			print(f'{L}: {p}')
 		plt.plot(xs[L], Ss[L], label=f'L = {L}')
 
 
@@ -124,24 +132,36 @@ def fig2(filenames, ax = None):
 	ax.legend(fontsize=16)
 
 
-data = load_data('data/base2.json')
-print(f'num samples: {len(data.slides[0]["entropy"])}')
-plot_all_data(data, steady_state=0)
-plt.show()
+#data = load_data('data/base_large.json')
+#print(f'num samples: {len(data.slides[0]["entropy"])}')
+#plot_all_data(data, steady_state=0)
+#plt.show()
 
 filenames = ['data/fig2_1.json', 'data/fig2_2.json', 'data/fig2_3.json']
 ax = plt.gca()
-fig2(filenames, ax)
+
+linear_fit = False
+
+fig2(filenames, steady_state=1000, ax=ax, linear_fit=linear_fit)
 timedata = load_data('data/timeseries.json')
+
 t = []
 S = []
 for slide in timedata.slides:
 	t.append(slide['timesteps'])
 	S.append(slide['entropy'])
 
-t, S = np.log(np.array(t)), np.array(S)
+t, S = np.log(np.array(t)), np.array(S).flatten()
+inds = np.argsort(t)
+t, S = t[inds], S[inds]
+
 
 ax.plot(t, S)
+if linear_fit:
+	fit_ind = 10
+	p = curve_fit(linear, t[fit_ind:], S[fit_ind:])[0]
+	ax.plot(t[fit_ind:], p[0]*t[fit_ind:] + p[1], linestyle='--')
+	print(f'800 logt: {list(p)}')
 ax.set_xlabel(r'$\log(x), \log(t)$', fontsize=16)
 plt.show()
 
