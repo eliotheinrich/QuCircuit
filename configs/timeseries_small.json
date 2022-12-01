@@ -1,0 +1,14 @@
+{
+	"run_name": "timeseries_small",
+	"simulator_type": 0,
+	"system_sizes": [800],
+	"partition_sizes": [400],
+	"mzr_probs": [0.138],
+	"timesteps": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+	"num_runs": 10,
+	"space_avg": true,
+	"spacing": 5,
+	"measurement_freq": 1,
+	"temporal_avg": false,
+	"filename": "timeseries_small.json"
+}

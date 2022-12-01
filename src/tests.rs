@@ -9,6 +9,13 @@ pub mod tests {
 	use crate::quantum_graph_state::QuantumGraphState;
 	use crate::quantum_vector_state::QuantumVectorState;
 	use crate::quantum_state::{QuantumProgram, QuantumState, Entropy};
+	use crate::dataframe::Sample;
+
+	const EPS: f32 = 0.0001;
+
+	fn isclose(f1: f32, f2: f32) -> bool {
+		return (f1 - f2).abs() < EPS
+	}
 
 	#[test]
 	fn test_simulators() {
@@ -59,8 +66,44 @@ pub mod tests {
 		}).collect();
 		
 		for s in entropy {
-			assert!((s.0 - s.1).abs() < 0.001); 
+			assert!(isclose(s.0, s.1)); 
 		}
+
+	}
+
+	#[test]
+	pub fn test_sample() {
+
+		let mut v1: Vec<f32> = vec![1.5, 3.2, 5.3, 2.2];
+		let m1: f32 = v1.iter().sum::<f32>()/(v1.len() as f32);
+		let s1: f32 = (v1.iter().map(|x| (x - m1).powi(2)).sum::<f32>()/(v1.len() as f32)).powf(0.5);
+		let sample1 = Sample::from(&v1);
+		assert!(isclose(m1, sample1.mean));
+		assert!(isclose(s1, sample1.std));
+		assert!(v1.len() == sample1.num_samples);
+
+		let mut v2: Vec<f32> = vec![4.3, 7.8, 9.2];
+		let m2: f32 = v2.iter().sum::<f32>()/(v2.len() as f32);
+		let s2: f32 = (v2.iter().map(|x| (x - m2).powi(2)).sum::<f32>()/(v2.len() as f32)).powf(0.5);
+		let sample2 = Sample::from(&v2);
+		assert!(isclose(m2, sample2.mean));
+		assert!(isclose(s2, sample2.std));
+		assert!(v2.len() == sample2.num_samples);
+
+
+
+		let mut v3: Vec<f32> = Vec::new();
+		v3.append(&mut v1);
+		v3.append(&mut v2);
+		let m3: f32 = v3.iter().sum::<f32>()/(v3.len() as f32);
+		let s3: f32 = (v3.iter().map(|x| (x - m3).powi(2)).sum::<f32>()/(v3.len() as f32)).powf(0.5);
+		let sample3 = Sample::from(&v3);
+		assert!(isclose(m3, sample3.mean));
+		assert!(isclose(s3, sample3.std));
+		assert!(v3.len() == sample3.num_samples);
+
+
+
 
 	}
 }

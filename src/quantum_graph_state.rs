@@ -610,10 +610,6 @@ impl QuantumState for QuantumGraphState {
 		return self.num_qubits;
 	}
 
-	fn to_datafield(&self) -> DataField {
-		return DataField::QuantumGraphState(self.clone());
-	}
-
     fn x_gate(&mut self, qubit: usize) {
 		assert!(qubit < self.num_qubits);
 		self.apply_gate(qubit, XGATE);

@@ -187,10 +187,6 @@ impl QuantumState for QuantumVectorState {
         return self.num_qubits;
     }
 
-    fn to_datafield(&self) -> DataField {
-        return DataField::QuantumVectorState(self.clone());
-    }
-
     fn x_gate(&mut self, qubit: usize) {
         assert!(qubit < self.num_qubits);
         let bitshift : u64 = 1 << qubit;

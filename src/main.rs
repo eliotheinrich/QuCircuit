@@ -12,7 +12,6 @@ fn compute_entropy_run(num_threads: usize, config_filename: &String) {
     println!("Time: {:.2?}", elapsed);
 }
 
-
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let num_threads = args[1].parse::<usize>().unwrap();

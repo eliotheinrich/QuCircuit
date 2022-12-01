@@ -1,23 +1,75 @@
 use std::collections::HashMap;
 use std::fs;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, Serializer, ser::SerializeTuple};
 use crate::{quantum_state::QuantumState, 
 		 	quantum_chp_state::QuantumCHPState, 
 			quantum_graph_state::QuantumGraphState, 
-			quantum_vector_state::QuantumVectorState};
+			quantum_vector_state::QuantumVectorState, util::compute_entropy};
 
 use rayon::prelude::*;
 
+#[derive(Deserialize, Clone)]
+pub struct Sample {
+	pub mean: f32,
+	pub std: f32,
+	pub num_samples: usize,
+}
+
+impl Sample {
+	pub fn new(s: f32) -> Sample {
+		return Sample{ mean: s, std: 0., num_samples: 1 };
+	}
+
+	pub fn from(vec: &Vec<f32>) -> Sample {
+		let num_samples: usize = vec.len();
+		let mut s: f32 = 0.;
+		let mut s2: f32 = 0.;
+
+		for v in vec {
+			s += v;
+			s2 += v*v;
+		}
+	
+		s /= num_samples as f32;
+		s2 /= num_samples as f32;
+
+		let mean: f32 = s;
+		let std: f32 = (s2 - s*s).powf(0.5);
+
+		return Sample { mean: mean, std: std, num_samples: num_samples }
+	}
+
+	pub fn combine(&self, other: &Sample) -> Sample {
+		let combined_samples: usize = self.num_samples + other.num_samples;
+		let combined_mean: f32 = ((self.num_samples as f32)*self.mean
+								+ (other.num_samples as f32)*other.mean)
+								/ (combined_samples as f32);
+		let combined_std: f32 = (((self.num_samples as f32)* (self.std.powi(2) +  (self.mean -  combined_mean).powi(2)) 
+							    + (other.num_samples as f32)*(other.std.powi(2) + (other.mean - combined_mean).powi(2)))
+							    / (combined_samples as f32)).powf(0.5);
+		return Sample { mean: combined_mean, std: combined_std, num_samples: combined_samples };
+	}
+}
+
+impl Serialize for Sample {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut seq = serializer.serialize_tuple(3)?;
+		seq.serialize_element(&self.mean)?;
+		seq.serialize_element(&self.std)?;
+		seq.serialize_element(&self.num_samples)?;
+		seq.end()
+    }
+}
 
 // Code for managing output data in runs
 #[derive(Serialize, Deserialize)]
 pub enum DataField {
 	Int(i32),
 	Float(f32),
-	Data(Vec<f32>),
-	QuantumCHPState(QuantumCHPState),
-	QuantumGraphState(QuantumGraphState),
-	QuantumVectorState(QuantumVectorState),
+	Data(Vec<Sample>),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -67,7 +119,7 @@ impl DataSlide {
 		self.data.insert(String::from(key), DataField::Float(val));
 	}
 
-	pub fn push_data(&mut self, key: &str, val: f32) {
+	pub fn push_data(&mut self, key: &str, val: Sample) {
 		match self.data.get_mut(key).unwrap() {
 			DataField::Data(v) => v.push(val),
 			_ => ()
@@ -76,11 +128,6 @@ impl DataSlide {
 
 	pub fn add_data(&mut self, key: &str) {
 		self.data.insert(String::from(key), DataField::Data(Vec::new()));
-	}
-
-
-	pub fn add_state<Q: QuantumState>(&mut self, key: &str, state: &Q) {
-		self.data.insert(String::from(key), state.to_datafield());
 	}
 
 	pub fn get_val(&self, key: &str) -> &DataField {
@@ -105,7 +152,7 @@ impl DataSlide {
 		}
 	}
 
-	pub fn unwrap_data(&self, key: &str) -> &Vec<f32> {
+	pub fn unwrap_data(&self, key: &str) -> &Vec<Sample> {
 		match &self.data[key] {
 			DataField::Data(x) => x,
 			_ => panic!()

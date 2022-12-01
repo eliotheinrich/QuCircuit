@@ -4,7 +4,7 @@ use crate::quantum_chp_state::QuantumCHPState;
 use crate::quantum_graph_state::QuantumGraphState;
 use crate::quantum_vector_state::QuantumVectorState;
 use crate::quantum_state::{QuantumState, Entropy};
-use crate::dataframe::{DataFrame, DataSlide, Simulator, RunConfig, ParallelCompute};
+use crate::dataframe::{Sample, DataFrame, DataSlide, Simulator, RunConfig, ParallelCompute};
 
 use serde::{Serialize, Deserialize};
 use rand::rngs::ThreadRng;
@@ -27,22 +27,21 @@ struct EntropyJSONConfig {
     mzr_probs: Vec<f32>,
     timesteps: Vec<usize>,
 
-    #[serde(default = "_zero")]
-    measurement_freq: usize,
-
     #[serde(default = "_one")]
     num_runs: usize,
+
+    #[serde(default = "_zero")]
+    equilibration_steps: usize,
+
+    #[serde(default = "_false")]
+    temporal_avg: bool,
+    #[serde(default = "_zero")]
+    measurement_freq: usize,
 
     #[serde(default = "_false")]
     space_avg: bool,
     #[serde(default = "_one")]
     spacing: usize,
-
-    #[serde(default = "_false")]
-    save_state: bool,
-
-    #[serde(default = "_false")]
-    load_state: bool,
 
     #[serde(default = "_true")]
     save_data: bool, 
@@ -70,13 +69,15 @@ struct EntropyConfig {
     mzr_prob: f32,
     timesteps: usize,
 
-    measurement_freq: usize,
     num_runs: usize,
+
+    equilibration_steps: usize,
+
+    temporal_avg: bool,
+    measurement_freq: usize,
     
     space_avg: bool,
     spacing: usize,
-    save_state: bool,
-    load_state: bool,
 }
 
 enum Gate {
@@ -141,23 +142,27 @@ impl EntropyConfig {
             mzr_prob: json_config.mzr_probs[mzr_idx],
             timesteps: json_config.timesteps[timesteps_idx],
 
-            measurement_freq: json_config.measurement_freq,
             num_runs: json_config.num_runs,
+
+            equilibration_steps: json_config.equilibration_steps,
+
+            temporal_avg: json_config.temporal_avg,
+            measurement_freq: json_config.measurement_freq,
 
             space_avg: json_config.space_avg,
             spacing: json_config.spacing,
-            save_state: json_config.save_state,
-            load_state: json_config.load_state,
         }
     }
 
-    fn compute_entropy<Q: QuantumState + Entropy>(&self, quantum_state: &mut Q) -> Vec<f32> {
+    fn compute_entropy<Q: QuantumState + Entropy>(&self, quantum_state: &mut Q) -> Vec<Sample> {
         let system_size = quantum_state.system_size();
         let qubits: Vec<usize> = (0..self.partition_size).collect();
-        let mut entropy: Vec<f32> = Vec::new();
+        let mut entropy: Vec<Sample> = Vec::new();
 
         // Intially polarize in x-direction
         polarize(quantum_state);
+
+        do_timesteps(quantum_state, self.equilibration_steps, self.mzr_prob);
 
         // Do timesteps
         let (num_timesteps, num_intervals): (usize, usize) = if self.measurement_freq == 0 { 
@@ -169,46 +174,54 @@ impl EntropyConfig {
         for t in 0..num_intervals {
             do_timesteps(quantum_state, num_timesteps, self.mzr_prob);
 
-            let s: f32 = 
+            let sample: Sample = 
             if self.space_avg {
                 let num_partitions = (self.system_size - self.partition_size)/self.spacing;
 
-                let mut tmp: f32 = 0.;
+                let mut s: f32 = 0.;
+                let mut s2: f32 = 0.;
+
                 for i in 0..num_partitions {
                     let offset_qubits: Vec<usize> = qubits.iter().map(|x| x + i*self.spacing).collect();
-                    tmp += quantum_state.renyi_entropy(&offset_qubits);
+                    let tmp: f32 = quantum_state.renyi_entropy(&offset_qubits);
+                    s += tmp;
+                    s2 += tmp.powi(2);
                 }
-                tmp/(num_partitions as f32)
+
+                s /= num_partitions as f32;
+                s2 /= num_partitions as f32;
+                let std: f32 = (s2 - s.powi(2)).powf(0.5);
+                Sample { mean: s, std: std, num_samples: num_partitions }
             } else {
-                quantum_state.renyi_entropy(&qubits)
+                Sample::new(quantum_state.renyi_entropy(&qubits))
             };
 
-            entropy.push(s);
+            entropy.push(sample);
         }
 
         return entropy;
     }
 
     fn save_to_dataslide<Q: QuantumState + Entropy + Clone>(&self, dataslide: &mut DataSlide, quantum_state: &mut Q) {
-        let num_datapoints = if self.measurement_freq == 0 { 1 } else { self.timesteps / self.measurement_freq };
-        let mut entropy: Vec<f32> = vec![0.; num_datapoints];
-        let mut state: &Q;
-
-        let mut entropy_tmp: Vec<f32> = vec![0.; num_datapoints];
         let init_quantum_state = quantum_state.clone();
-        for run in 0..self.num_runs {
+
+        let mut entropy: Vec<Sample> = self.compute_entropy(quantum_state);
+
+        for run in 0..(self.num_runs - 1) {
             *quantum_state = init_quantum_state.clone(); // Reinitialize state
-            entropy_tmp = self.compute_entropy::<Q>(quantum_state);
-            entropy = entropy.iter().zip(entropy_tmp.iter()).map(|(a, b)| a + b).collect();
+            entropy = entropy.iter()
+                             .zip(self.compute_entropy(quantum_state).iter())
+                             .map(|(a, b)| a.combine(b))
+                             .collect();
         }
 
+        if self.temporal_avg {
+            let sample: Sample = entropy.iter().fold(Sample { mean: 0., std: 0., num_samples: 0 }, |sum, val| sum.combine(val));
+            entropy = vec![sample];
+        }
 
         for s in entropy {
-            dataslide.push_data("entropy", s/(self.num_runs as f32));
-        }
-
-        if self.save_state {
-            dataslide.add_state("state", quantum_state);
+            dataslide.push_data("entropy", s);
         }
     }
 
@@ -216,38 +229,27 @@ impl EntropyConfig {
 
 impl RunConfig for EntropyConfig {
     fn init_state(&self) -> Simulator {
-        if self.load_state {
-            // TODO implement loading states
-            return Simulator::CHP(QuantumCHPState::new(self.system_size))
-        } else {
-            return match self.simulator_type {
-                0 => Simulator::CHP(QuantumCHPState::new(self.system_size)),
-                1 => Simulator::Graph(QuantumGraphState::new(self.system_size)),
-                2 => Simulator::Vector(QuantumVectorState::new(self.system_size)),
-                _ => {
-                    println!("Error: simulator type provided not supported.");
-                    panic!()
-                }
-            }       
-        }
+        return match self.simulator_type {
+            0 => Simulator::CHP(QuantumCHPState::new(self.system_size)),
+            1 => Simulator::Graph(QuantumGraphState::new(self.system_size)),
+            2 => Simulator::Vector(QuantumVectorState::new(self.system_size)),
+            _ => {
+                println!("Error: simulator type provided not supported.");
+                panic!()
+            }
+        }       
     }
 
     fn gen_dataslide(&self, mut simulator: Simulator) -> DataSlide {
         assert!(self.num_runs > 0);
         let mut dataslide: DataSlide = DataSlide::new();
 
-        let system_size = self.system_size;
-        let timesteps = self.timesteps;
-        let measurement_freq = self.measurement_freq;
-        let save_state = self.save_state;
-
-        let partition_size: usize = self.partition_size;
-        let mzr_prob: f32 = self.mzr_prob;
-
-        dataslide.add_int_param("system_size", system_size as i32);
-        dataslide.add_int_param("timesteps", timesteps as i32);
-        dataslide.add_int_param("partition_size", partition_size as i32);
-        dataslide.add_float_param("mzr_prob", mzr_prob);
+        dataslide.add_int_param("system_size", self.system_size as i32);
+        dataslide.add_int_param("timesteps", self.timesteps as i32);
+        dataslide.add_int_param("partition_size", self.partition_size as i32);
+        dataslide.add_int_param("measurement_freq", self.measurement_freq as i32);
+        dataslide.add_int_param("equilibration_steps", self.equilibration_steps as i32);
+        dataslide.add_float_param("mzr_prob", self.mzr_prob);
         dataslide.add_data("entropy");
         
         match simulator {

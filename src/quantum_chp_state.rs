@@ -121,10 +121,6 @@ impl QuantumState for QuantumCHPState {
 		return self.num_qubits;
 	}
 
-	fn to_datafield(&self) -> DataField {
-		return DataField::QuantumCHPState(self.clone());
-	}
-
 	fn h_gate(&mut self, qubit: usize) {
 		for i in 0..2*self.num_qubits {
 			let x = self.tableau.x(i, qubit);
