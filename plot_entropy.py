@@ -3,16 +3,56 @@ import matplotlib.pyplot as plt
 import json
 from scipy.optimize import curve_fit
 
+def combine_dist(s1, s2):
+	(mean1, std1, N1) = s1
+	(mean2, std2, N2) = s2
+
+	N3 = N1 + N2
+	mean3 = (N1*mean1 + N2*mean2)/N3
+	std3 = np.sqrt((N1*(std1**2 + (mean1 - mean3)**2) + N2*(std2**2 + (mean2 - mean3)**2))/N3)
+
+	return (mean3, std3, N3)
+
+def combine_many_dists(dists):
+	dists = list(dists)
+	dist = dists[0]
+	for d in dists[1:]:
+		dist = combine_dist(d, dist)
+	return dist
+
 class DataSlide:
 	def __init__(self, keys, vals):
 		self.data = dict(zip(keys, vals))
 		
-	def __getitem__(self, key):
-		return self.data[key]
+	def get(self, key):
+		if self.data[key].ndim == 1:
+			return self.data[key][0]
+		else:
+			return self.data[key][:,0]
+	
+	def get_err(self, key):
+		if self.data[key].ndim == 1:
+			raise KeyError("Data not found")
+		else:
+			return self.data[key][:,1]
+
+	def get_nruns(self, key):
+		if self.data[key].ndim == 1:
+			raise KeyError("Data not found")
+		else:
+			return self.data[key][:,2]
 
 class DataFrame:
 	def __init__(self):
 		self.slides = []
+	
+	def __add__(self, other):
+		new = DataFrame()
+		for slide in self.slides:
+			new.add_dataslide(slide)
+		for slide in other.slides:
+			new.add_dataslide(slide)
+		return new
 
 	def add_dataslide(self, slide):
 		self.slides.append(slide)
@@ -20,10 +60,22 @@ class DataFrame:
 	def get_property_with_id(self, key, id):
 		return self.slides[id][key]
 
-	def get_property(self, key):
+	def get(self, key):
 		val = []
-		for df in self.slides:
-			val.append(df[key])
+		for slide in self.slides:
+			val.append(slide.get(key))
+		return np.array(val)
+	
+	def get_err(self, key):
+		val = []
+		for slide in self.slides:
+			val.append(slide.get_err(key))
+		return np.array(val)
+
+	def get_nruns(self, key):
+		val = []
+		for slide in self.slides:
+			val.append(slide.get_nruns(key))
 		return np.array(val)
 	
 	def query_key(self, key, val):
@@ -34,7 +86,11 @@ class DataFrame:
 		return new_df
 
 def parse_datafield(s):
-	return s[list(s.keys())[0]]
+	if list(s.keys())[0] == 'Data':
+		sample = s[list(s.keys())[0]]
+		return np.array(sample)
+	else:
+		return np.array([s[list(s.keys())[0]]])
 
 def load_data(filename):
 	data = DataFrame()
@@ -66,24 +122,25 @@ def plot_run(data: DataFrame, run_id: int, average_interval: int = 1, ax = None)
 	ax.set_xlabel(r'$t$', fontsize=16)
 	ax.set_ylabel(r'$S_A^2$', fontsize=16)
 
-def plot_all_data(data: DataFrame, steady_state: int = 0, ax = None):
-	assert steady_state < len(data.slides[0]['entropy']), "Steady state longer than total evolution time"
+def plot_all_data(data: DataFrame, ax = None):
 	if ax is None:
 		ax = plt.gca()
 
-	unique_p = sorted(list(set(data.get_property('mzr_prob'))))
-	unique_LA = sorted(list(set(data.get_property('partition_size'))))
-	entropy_avg = np.zeros((len(unique_p), len(unique_LA)))
+	unique_p = sorted(list(set(data.get('mzr_prob'))))
+	unique_LA = sorted(list(set(data.get('partition_size'))))
+	entropy = np.zeros((len(unique_p), len(unique_LA)))
+	entropy_err = np.zeros((len(unique_p), len(unique_LA)))
 	for slide in data.slides:
-		i = unique_p.index(slide['mzr_prob'])
-		j = unique_LA.index(slide['partition_size'])
+		i = unique_p.index(slide.get('mzr_prob'))
+		j = unique_LA.index(slide.get('partition_size'))
 
-		entropy_avg[i][j] = np.mean(slide['entropy'][steady_state:])
+		entropy[i][j] = slide.get('entropy')
+		entropy_err[i][j] = slide.get_err('entropy')
 
 	colors = ['C0', 'orange', 'yellow', 'purple', 'green', 'black', 'magenta', 'cyan']
 	for n,p in enumerate(unique_p):
 		if p != 0:
-			ax.plot(unique_LA, entropy_avg[n], linewidth=1.5, marker='*', color=colors[n-1 if 0 in unique_p else n], label=f'p = {p}')
+			ax.errorbar(unique_LA, entropy[n], yerr=entropy_err[n], linewidth=1.5, marker='*', color=colors[n-1 if 0 in unique_p else n], label=f'p = {p}')
 
 	ax.legend(fontsize=16)
 	ax.set_xlabel(r'$L_A$', fontsize=16)
@@ -92,7 +149,32 @@ def plot_all_data(data: DataFrame, steady_state: int = 0, ax = None):
 def linear(x, a, b):
 	return x*a + b
 
-def fig2(filenames, steady_state = 0, ax = None, linear_fit = False):
+def average_data(df: DataFrame, measurement_freq: int = 1):
+	entropy_samples = np.array([slide.get('entropy') for slide in df.slides]).T
+	entropy_err_samples = np.array([slide.get_err('entropy') for slide in df.slides]).T
+	nrun_samples = np.array([slide.get_nruns('entropy') for slide in df.slides]).T
+
+	num_times = len(entropy_samples)
+
+	S = np.zeros(num_times)
+	dS = np.zeros(num_times)
+	N = np.zeros(num_times)
+
+	for i in range(num_times):
+		(S[i], dS[i], N[i]) = combine_many_dists(zip(entropy_samples[i], entropy_err_samples[i], nrun_samples[i]))
+	
+	t = np.array([i*measurement_freq for i in range(1, 1 + num_times)])
+
+	return S, dS, N, t
+
+def fig1(filename, ax=None):
+	if ax is None:
+		ax = plt.gca()
+	
+	data = load_data(filename)
+	plot_all_data(data)
+
+def fig2(filenames, ax=None, linear_fit=False, timeseries_filenames=None):
 	if ax is None:
 		ax = plt.gca()
 	data = []
@@ -102,14 +184,13 @@ def fig2(filenames, steady_state = 0, ax = None, linear_fit = False):
 	xs = {}
 	Ss = {}
 	for df in data:
-		xs[df.slides[0]['system_size']] = []
-		Ss[df.slides[0]['system_size']] = []
-		num_samples = len(df.slides[0]['entropy'])
+		xs[df.slides[0].get('system_size')] = []
+		Ss[df.slides[0].get('system_size')] = []
 		for slide in df.slides:
-			xs[slide['system_size']].append(slide['partition_size'])
-			Ss[slide['system_size']].append(np.mean(slide['entropy'][steady_state:]))
-		xs[df.slides[0]['system_size']] = np.array(xs[df.slides[0]['system_size']])
-		Ss[df.slides[0]['system_size']] = np.array(Ss[df.slides[0]['system_size']])
+			xs[slide.get('system_size')].append(slide.get('partition_size'))
+			Ss[slide.get('system_size')].append(np.mean(slide.get('entropy')))
+		xs[df.slides[0].get('system_size')] = np.array(xs[df.slides[0].get('system_size')])
+		Ss[df.slides[0].get('system_size')] = np.array(Ss[df.slides[0].get('system_size')])
 	
 	for L, LA in xs.items():
 		xs[L] = np.log(np.sin(np.pi*LA/L)*L/np.pi)
@@ -127,41 +208,71 @@ def fig2(filenames, steady_state = 0, ax = None, linear_fit = False):
 		plt.plot(xs[L], Ss[L], label=f'L = {L}')
 
 
-	ax.set_xlabel(r'$\log(x)$', fontsize=16)
+	time = timeseries_filenames is not None
+	xlabel = r'$\log(x), \log(t)$' if time else r'$\log(x)$'
+	ax.set_xlabel(xlabel, fontsize=16)
+
 	ax.set_ylabel(r'$\overline{S_A^{(2)}}$', fontsize=16)
 	ax.legend(fontsize=16)
+	if time:
+		timedata = [load_data(f) for f in timeseries_filenames]
+
+		(S1, dS1, N1, t1) = average_data(timedata[0], 1)
+		(S2, dS2, N2, t2) = average_data(timedata[1], 10)
+
+		S, dS, N, t = np.concatenate((S1, S2)), np.concatenate((dS1, dS2)), np.concatenate((N1, N2)), np.concatenate((t1, t2))
+
+		inds = np.argsort(t)
+		S, dS, N, t = S[inds], dS[inds], N[inds], t[inds]
+		
+		logt = np.log(t)
+
+		ax.plot(logt, S)
+		if linear_fit:
+			fit_ind = 15
+			p = curve_fit(linear, logt[fit_ind:], S[fit_ind:])[0]
+			ax.plot(logt[fit_ind:], p[0]*logt[fit_ind:] + p[1], linestyle='--')
+			print(f'800 logt: {list(p)}')
+
+def fig3(filename, ax=None):
+	if ax is None:
+		ax = plt.gca()
+	data = load_data(filename)
+	S, dS, N, t = average_data(data)
+	logt = np.log(t)
+	var = dS**2
+
+	L = data.get('system_size')[0]
+
+	norm = S[10] / (dS**2)[10]
+	ax.plot(t, var, marker='*', label=r'Var($\overline{S_A^{(2)}}$)')
+	ax.plot(t, S, marker='*', label=r'$\overline{S_A^{(2)}}$')
+	ax.text(0.75, 0.75, r'$p = 0.138$', transform=ax.transAxes, fontsize=16)
+	ax.text(0.75, 0.65, r'$L = 800$', transform=ax.transAxes, fontsize=16)
+	ax.text(0.75, 0.55, r'$L_A = 400$', transform=ax.transAxes, fontsize=16)
+	ax.set_xlabel(r'$t$', fontsize=16)
+	ax.set_ylabel(r'$\overline{S_A^{(2)}}$,   Var($\overline{S_A^{(2)}}$)', fontsize=16)
+	ax.legend(fontsize=16)
+
+	fit_ind = 15
+	p = curve_fit(linear, logt[fit_ind:], var[fit_ind:])[0]
+	print(f'800 logt: {list(p)}')
+
+	fit_ind = 15
+	p = curve_fit(linear, logt[fit_ind:], S[fit_ind:])[0]
+	print(f'800 logt: {list(p)}')
 
 
-#data = load_data('data/base_large.json')
-#print(f'num samples: {len(data.slides[0]["entropy"])}')
-#plot_all_data(data, steady_state=0)
+#fig1("data/base.json", ax=plt.gca())
 #plt.show()
 
+
 filenames = ['data/fig2_1.json', 'data/fig2_2.json', 'data/fig2_3.json']
-ax = plt.gca()
+filenames = []
+timeseries_filenames = ['data/timeseries.json', 'data/timeseries_small.json']
+#fig2(filenames, ax=plt.gca(), linear_fit=True, timeseries_filenames=['data/timeseries_small.json', 'data/timeseries.json'])
+#plt.show()
 
-linear_fit = False
-
-fig2(filenames, steady_state=1000, ax=ax, linear_fit=linear_fit)
-timedata = load_data('data/timeseries.json')
-
-t = []
-S = []
-for slide in timedata.slides:
-	t.append(slide['timesteps'])
-	S.append(slide['entropy'])
-
-t, S = np.log(np.array(t)), np.array(S).flatten()
-inds = np.argsort(t)
-t, S = t[inds], S[inds]
-
-
-ax.plot(t, S)
-if linear_fit:
-	fit_ind = 10
-	p = curve_fit(linear, t[fit_ind:], S[fit_ind:])[0]
-	ax.plot(t[fit_ind:], p[0]*t[fit_ind:] + p[1], linestyle='--')
-	print(f'800 logt: {list(p)}')
-ax.set_xlabel(r'$\log(x), \log(t)$', fontsize=16)
+fig3('data/timeseries.json', plt.gca())
 plt.show()
 
