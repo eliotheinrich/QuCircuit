@@ -149,12 +149,15 @@ def plot_all_data(data: DataFrame, ax = None):
 def linear(x, a, b):
 	return x*a + b
 
-def average_data(df: DataFrame, measurement_freq: int = 1):
+def average_data(df: DataFrame):
 	entropy_samples = np.array([slide.get('entropy') for slide in df.slides]).T
 	entropy_err_samples = np.array([slide.get_err('entropy') for slide in df.slides]).T
 	nrun_samples = np.array([slide.get_nruns('entropy') for slide in df.slides]).T
 
 	num_times = len(entropy_samples)
+	print(df.slides[0].data)
+	measurement_freq = df.slides[0].get('measurement_freq')
+	equilibration_steps = df.slides[0].get('equilibration_steps')
 
 	S = np.zeros(num_times)
 	dS = np.zeros(num_times)
@@ -163,20 +166,26 @@ def average_data(df: DataFrame, measurement_freq: int = 1):
 	for i in range(num_times):
 		(S[i], dS[i], N[i]) = combine_many_dists(zip(entropy_samples[i], entropy_err_samples[i], nrun_samples[i]))
 	
-	t = np.array([i*measurement_freq for i in range(1, 1 + num_times)])
+	t = np.array([equilibration_steps + i*measurement_freq for i in range(num_times)])
+	print(t)
 
 	return S, dS, N, t
 
-def fig1(filename, ax=None):
-	if ax is None:
-		ax = plt.gca()
+def fig1(filename):
+	ax = plt.gca()
 	
 	data = load_data(filename)
 	plot_all_data(data)
+	plt.show()
 
-def fig2(filenames, ax=None, linear_fit=False, timeseries_filenames=None):
-	if ax is None:
-		ax = plt.gca()
+
+def logx(partition_size, system_size):
+	return np.log(np.sin(np.pi*partition_size/system_size)*system_size/np.pi)
+
+
+def fig2(filenames, timeseries_filenames):
+	linear_fit = True
+	ax = plt.gca()
 	data = []
 	for filename in filenames:
 		data.append(load_data(filename))
@@ -193,9 +202,9 @@ def fig2(filenames, ax=None, linear_fit=False, timeseries_filenames=None):
 		Ss[df.slides[0].get('system_size')] = np.array(Ss[df.slides[0].get('system_size')])
 	
 	for L, LA in xs.items():
-		xs[L] = np.log(np.sin(np.pi*LA/L)*L/np.pi)
+		xs[L] = logx(LA, L)
 
-	for L, logx in xs.items():
+	for L, x in xs.items():
 		inds = np.argsort(xs[L])
 		xs[L] = xs[L][inds]
 		Ss[L] = Ss[L][inds]
@@ -208,19 +217,16 @@ def fig2(filenames, ax=None, linear_fit=False, timeseries_filenames=None):
 		plt.plot(xs[L], Ss[L], label=f'L = {L}')
 
 
-	time = timeseries_filenames is not None
+	time = timeseries_filenames != []
 	xlabel = r'$\log(x), \log(t)$' if time else r'$\log(x)$'
 	ax.set_xlabel(xlabel, fontsize=16)
 
 	ax.set_ylabel(r'$\overline{S_A^{(2)}}$', fontsize=16)
 	ax.legend(fontsize=16)
 	if time:
-		timedata = [load_data(f) for f in timeseries_filenames]
+		data = [average_data(load_data(f)) for f in timeseries_filenames]
 
-		(S1, dS1, N1, t1) = average_data(timedata[0], 1)
-		(S2, dS2, N2, t2) = average_data(timedata[1], 10)
-
-		S, dS, N, t = np.concatenate((S1, S2)), np.concatenate((dS1, dS2)), np.concatenate((N1, N2)), np.concatenate((t1, t2))
+		S, dS, N, t = [np.concatenate(tuple(val[i] for val in data)) for i in range(4)]
 
 		inds = np.argsort(t)
 		S, dS, N, t = S[inds], dS[inds], N[inds], t[inds]
@@ -233,10 +239,11 @@ def fig2(filenames, ax=None, linear_fit=False, timeseries_filenames=None):
 			p = curve_fit(linear, logt[fit_ind:], S[fit_ind:])[0]
 			ax.plot(logt[fit_ind:], p[0]*logt[fit_ind:] + p[1], linestyle='--')
 			print(f'800 logt: {list(p)}')
+	
+	plt.show()
 
-def fig3(filename, ax=None):
-	if ax is None:
-		ax = plt.gca()
+def fig3(filename):
+	ax = plt.gca()
 	data = load_data(filename)
 	S, dS, N, t = average_data(data)
 	logt = np.log(t)
@@ -261,18 +268,38 @@ def fig3(filename, ax=None):
 	fit_ind = 15
 	p = curve_fit(linear, logt[fit_ind:], S[fit_ind:])[0]
 	print(f'800 logt: {list(p)}')
+	plt.show()
 
 
-#fig1("data/base.json", ax=plt.gca())
-#plt.show()
+def fig4(filename):
+	data = load_data(filename)
+	partition_sizes = np.array([slide.get('partition_size') for slide in data.slides])
+	entropy = data.get('entropy').flatten()
+	entropy_err = data.get_err('entropy').flatten()
 
+	inds = np.argsort(partition_sizes)
+	partition_sizes, entropy, entropy_err = partition_sizes[inds], entropy[inds], entropy_err[inds]
+	system_size = data.get('system_size')[0]
+
+	x = np.array([logx(partition_size, system_size) for partition_size in partition_sizes])
+
+	ax = plt.gca()
+	ee_string = r'$\overline{S_A^{(2)}}$'
+	ax.plot(x, entropy_err**2, marker='*', label=f'Var({ee_string})')
+	ax.plot(x, entropy, marker='*', label=ee_string)
+	ax.set_xlabel(r'$L_A$', fontsize=16)
+	ax.set_ylabel(r'Var($\overline{S_A^{(2)}}$)', fontsize=16)
+	ax.legend(fontsize=16)
+	plt.show()
+
+
+#fig1("data/base.json")
 
 filenames = ['data/fig2_1.json', 'data/fig2_2.json', 'data/fig2_3.json']
-filenames = []
 timeseries_filenames = ['data/timeseries.json', 'data/timeseries_small.json']
-#fig2(filenames, ax=plt.gca(), linear_fit=True, timeseries_filenames=['data/timeseries_small.json', 'data/timeseries.json'])
-#plt.show()
+#fig2(filenames, timeseries_filenames)
 
-fig3('data/timeseries.json', plt.gca())
-plt.show()
+#fig3('data/timeseries.json')
+
+fig4('data/fluctuation.json')
 
