@@ -105,6 +105,16 @@ pub struct QuantumCHPState {
 	rng: Lcg64Xsh32,
 }
 
+impl QuantumCHPState {
+	pub fn random_1qubit_clifford(&mut self, qubit: usize) {
+		
+	}
+
+	pub fn random_2qubit_clifford(&mut self, qubit1: usize, qubit2: usize) {
+
+	}
+}
+
 impl QuantumState for QuantumCHPState {
 	fn new(num_qubits: usize) -> Self {
 		return QuantumCHPState { num_qubits: num_qubits, tableau: Tableau::new(num_qubits), rng: Lcg64Xsh32::new(10, 10) };

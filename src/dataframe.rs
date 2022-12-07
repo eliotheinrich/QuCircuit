@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 use std::fs;
 use serde::{Serialize, Deserialize, Serializer, ser::SerializeTuple};
-use crate::{quantum_state::QuantumState, 
-		 	quantum_chp_state::QuantumCHPState, 
+use crate::{quantum_chp_state::QuantumCHPState, 
 			quantum_graph_state::QuantumGraphState, 
-			quantum_vector_state::QuantumVectorState, util::compute_entropy};
+			quantum_vector_state::QuantumVectorState};
 
 use rayon::prelude::*;
 
@@ -65,7 +64,7 @@ impl Serialize for Sample {
 }
 
 // Code for managing output data in runs
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub enum DataField {
 	Int(i32),
 	Float(f32),
@@ -74,12 +73,13 @@ pub enum DataField {
 
 #[derive(Serialize, Deserialize)]
 pub struct DataFrame {
+	pub params: HashMap<String, DataField>,
 	pub slides: Vec<DataSlide>
 }
 
 impl DataFrame {
 	pub fn new() -> Self {
-		return DataFrame { slides: Vec::new() };
+		return DataFrame { params: HashMap::new(), slides: Vec::new() };
 	}
 
 	pub fn from(mut slides: Vec<DataSlide>) -> Self {
@@ -100,7 +100,7 @@ impl DataFrame {
 	}
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct DataSlide {
 	data: HashMap<String, DataField>,
 }
@@ -176,14 +176,23 @@ pub trait RunConfig {
 pub struct ParallelCompute<C: RunConfig + std::marker::Sync> {
     num_threads: usize,
     configs: Vec<C>,
+	params: HashMap<String, DataField>,
 
     initialized: bool,
 }
 
 impl<C: RunConfig + std::marker::Sync> ParallelCompute<C> {
     pub fn new(num_threads: usize, configs: Vec<C>) -> Self {
-        Self { num_threads: num_threads, configs: configs, initialized: false }
+        Self { num_threads: num_threads, configs: configs, params: HashMap::new(), initialized: false }
     }
+
+	pub fn add_int_param(&mut self, key: &str, val: i32) {
+		self.params.insert(String::from(key), DataField::Int(val));
+	}
+
+	pub fn add_float_param(&mut self, key: &str, val: f32) {
+		self.params.insert(String::from(key), DataField::Float(val));
+	}
 
     pub fn compute(&self) -> DataFrame {
         if !self.initialized {
@@ -195,6 +204,6 @@ impl<C: RunConfig + std::marker::Sync> ParallelCompute<C> {
             self.configs[i].gen_dataslide(state)
         }).collect();
 
-        return DataFrame::from(slides);
+		return DataFrame{ params: self.params.clone(), slides: slides };
     }
 }

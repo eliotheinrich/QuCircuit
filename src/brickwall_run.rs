@@ -165,11 +165,12 @@ impl EntropyConfig {
         do_timesteps(quantum_state, self.equilibration_steps, self.mzr_prob);
 
         // Do timesteps
-        let (num_timesteps, num_intervals): (usize, usize) = if self.measurement_freq == 0 { 
-            (self.timesteps, 1) 
+        let (num_timesteps, num_intervals): (usize, usize) = if self.timesteps == 0 { 
+            (0, 1)
         } else { 
             (self.measurement_freq, self.timesteps/self.measurement_freq)
         };
+
         
         for t in 0..num_intervals {
             do_timesteps(quantum_state, num_timesteps, self.mzr_prob);
@@ -244,12 +245,12 @@ impl RunConfig for EntropyConfig {
         assert!(self.num_runs > 0);
         let mut dataslide: DataSlide = DataSlide::new();
 
+        // Parameters
         dataslide.add_int_param("system_size", self.system_size as i32);
         dataslide.add_int_param("timesteps", self.timesteps as i32);
         dataslide.add_int_param("partition_size", self.partition_size as i32);
-        dataslide.add_int_param("measurement_freq", self.measurement_freq as i32);
-        dataslide.add_int_param("equilibration_steps", self.equilibration_steps as i32);
         dataslide.add_float_param("mzr_prob", self.mzr_prob);
+
         dataslide.add_data("entropy");
         
         match simulator {
@@ -315,6 +316,8 @@ pub fn take_data(num_threads: usize, cfg_filename: &String) {
     let configs: Vec<EntropyConfig> = load_json_config(&json_config);
 
     let mut pc = ParallelCompute::new(num_threads, configs);
+    pc.add_int_param("equilibration_steps", json_config.equilibration_steps as i32);
+    pc.add_int_param("measurement_freq", json_config.measurement_freq as i32);
     let dataframe = pc.compute();
     
     if json_config.save_data {
