@@ -1,6 +1,6 @@
 use bit_vec::BitVec;
 use rand_pcg::Lcg64Xsh32;
-use rand::RngCore;
+use rand::{RngCore, SeedableRng};
 use serde::{Serialize, Deserialize};
 
 use crate::quantum_state::{Entropy, QuantumState};
@@ -107,7 +107,7 @@ pub struct QuantumCHPState {
 
 impl QuantumState for QuantumCHPState {
 	fn new(num_qubits: usize) -> Self {
-		return QuantumCHPState { num_qubits: num_qubits, tableau: Tableau::new(num_qubits), rng: Lcg64Xsh32::new(10, 10) };
+		return QuantumCHPState { num_qubits: num_qubits, tableau: Tableau::new(num_qubits), rng: Lcg64Xsh32::from_entropy() };
 	}
 
 	fn print(&self) -> String {

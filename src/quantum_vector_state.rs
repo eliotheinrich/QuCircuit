@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use num::complex::Complex;
 use rand_pcg::Lcg64Xsh32;
-use rand::RngCore;
+use rand::{RngCore, SeedableRng};
 use serde::{Serialize, Deserialize};
 
 use crate::quantum_state::{Entropy, QuantumState};
@@ -169,7 +169,7 @@ impl QuantumState for QuantumVectorState {
     fn new(num_qubits: usize) -> QuantumVectorState {
         let mut s : Vec<BasisState> = Vec::new();
         s.push(BasisState { bits: 0, amp: ONE });
-        let rng = Lcg64Xsh32::new(10, 10);
+        let rng = Lcg64Xsh32::from_entropy();
         return QuantumVectorState { num_qubits: num_qubits, state: s, rng: rng };
     }
 

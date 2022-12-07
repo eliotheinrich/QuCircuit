@@ -1,7 +1,7 @@
 use std::collections::{BTreeSet, HashMap};
 use indexmap::set::IndexSet;
 use rand_pcg::Lcg64Xsh32;
-use rand::RngCore;
+use rand::{RngCore, SeedableRng};
 use serde::{Serialize, Deserialize};
 
 use crate::quantum_vector_state::QuantumVectorState;
@@ -587,7 +587,7 @@ impl QuantumState for QuantumGraphState {
 			graph.add_vertex(HGATE);
 		}
 
-		return QuantumGraphState { num_qubits: num_qubits, graph: graph , rng: Lcg64Xsh32::new(10, 10) };
+		return QuantumGraphState { num_qubits: num_qubits, graph: graph , rng: Lcg64Xsh32::from_entropy() };
 	}
 
 	fn print(&self) -> String { 
