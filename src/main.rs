@@ -14,8 +14,16 @@ fn compute_entropy_run(num_threads: usize, config_filename: &String) {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let num_threads = args[1].parse::<usize>().unwrap();
-    let cfg_filename = &args[2];
+    //let num_threads = args[1].parse::<usize>().unwrap();
+    //let cfg_filename = &args[2];
     
-    compute_entropy_run(num_threads, cfg_filename)
+    //compute_entropy_run(num_threads, cfg_filename);
+
+    use quantum_circuit::quantum_chp_state::QuantumCHPState;
+    use quantum_circuit::quantum_state::QuantumState;
+    let mut state: QuantumCHPState = QuantumCHPState::new(3);
+    for i in 0..20 {
+        state.random_clifford([1]);
+    }
+
 }
