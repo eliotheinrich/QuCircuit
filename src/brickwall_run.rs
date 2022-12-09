@@ -116,7 +116,6 @@ fn apply_default_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadR
 }
 
 fn timesteps_default<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32) {
-    println!("Calling default timesteps");
     let mut rng: ThreadRng = rand::thread_rng();
     for i in 0..timesteps {
         apply_default_layer(quantum_state, &mut rng, false, &Gate::CX);
@@ -135,7 +134,6 @@ fn timesteps_default<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, m
 }
 
 fn timesteps_random_clifford<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32) {
-    println!("Calling random clifford");
     let system_size = quantum_state.system_size();
     let mut rng: ThreadRng = rand::thread_rng();
 
