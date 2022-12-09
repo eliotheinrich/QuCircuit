@@ -6,9 +6,9 @@ use serde::{Serialize, Deserialize};
 use crate::quantum_state::{Entropy, QuantumState};
 use crate::dataframe::DataField;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 struct PauliString {
-	num_qubits: usize,
+	pub num_qubits: usize,
 	bit_string: BitVec,
 	phase: bool,
 }
@@ -26,9 +26,7 @@ impl PauliString {
 			bits.set(j, (i >> j & 1) != 0);
 		}
 
-		let p = PauliString { num_qubits: num_qubits, bit_string: bits, phase: rng.next_u32() % 2 == 0 };
-		println!("rand: {} -> {}", i, p.to_string(true));
-		p
+		PauliString { num_qubits: num_qubits, bit_string: bits, phase: rng.next_u32() % 2 == 0 }
 	}
 
 	fn to_op(&self, i: usize) -> &str {
@@ -95,7 +93,7 @@ impl PauliString {
 		let commuting_indices: usize = (0..self.num_qubits).map(|i| {
 			self.commutes_at(other, i)
 		}).filter(|i| *i).count();
-		commuting_indices % 2 == 0
+		commuting_indices % 2 == 1
 	}
 
 	pub fn anticommutes(&self, other: &PauliString) -> bool {
@@ -103,12 +101,10 @@ impl PauliString {
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 struct Tableau {
-	num_qubits: usize,
 	rows: Vec<PauliString>,
-	//rows: Vec<BitVec>,
-	//phase: BitVec,
+	track_destabilizers: bool,
 }
 
 impl Tableau {
@@ -118,29 +114,39 @@ impl Tableau {
 			rows[i].set_x(i, true);
 			rows[i + num_qubits].set_z(i, true);
 		}
-		return Tableau { num_qubits: num_qubits, rows: rows };
+		
+		Tableau { rows: rows, track_destabilizers: true }
 	}
 
 	pub fn print(&self) -> String {
 		let mut s: String = String::new();
-		for i in 0..2*self.num_qubits {
+		for i in 0..self.rows.len() {
 			s.push_str(if i == 0 { "[" } else { " " });
 			s.push_str(&self.rows[i].to_string(true));
-			s.push_str(if i == 2*self.num_qubits - 1 { "]" } else { "\n" });
+			s.push_str(if i == 2*self.rows.len() - 1 { "]" } else { "\n" });
 		}
-		return s;
+		
+		s
 	}
 
 	fn x(&self, i: usize, j: usize) -> bool {
-		return self.rows[i].x(j);
+		self.rows[i].x(j)
+	}
+
+	fn x_block(&self, i: usize) -> Vec<u8> {
+		(0..self.rows[i].num_qubits).map(|j| self.x(i, j) as u8).collect()
+	}
+
+	fn z_block(&self, i: usize) -> Vec<u8> {
+		(0..self.rows[i].num_qubits).map(|j| self.z(i, j) as u8).collect()
 	}
 
 	fn z(&self, i: usize, j: usize) -> bool {
-		return self.rows[i].z(j);
+		self.rows[i].z(j)
 	}
 
 	fn r(&self, i: usize) -> bool {
-		return self.rows[i].r();
+		self.rows[i].r()
 	}
 
 	fn set_x(&mut self, i: usize, j: usize, v: bool) {
@@ -171,11 +177,13 @@ impl Tableau {
 	}
 
 	pub fn rowsum(&mut self, h: usize, i: usize) {
+		assert!(self.track_destabilizers);
 		let mut s: i32 = 0;
 		if self.r(i) { s += 2 }
 		if self.r(h) { s += 2 }
 
-		for j in 0..self.num_qubits {
+		let num_qubits: usize = self.rows.len()/2;
+		for j in 0..num_qubits {
 			s += Self::g(self.x(i, j), self.z(i, j), self.x(h, j), self.z(h, j));
 		}
 		if s % 4 == 0 {
@@ -184,10 +192,124 @@ impl Tableau {
 			self.set_r(h, true);
 		}
 
-		for j in 0..self.num_qubits {
+		for j in 0..num_qubits {
 			self.set_x(h, j, self.x(i, j) != self.x(h, j));
 			self.set_z(h, j, self.z(i, j) != self.z(h, j));
 		}
+	}
+
+	pub fn h_gate(&mut self, qubit: usize) {
+		for i in 0..self.rows.len() {
+			let x = self.x(i, qubit);
+			let z = self.z(i, qubit);
+			let r = self.r(i);
+
+			// Set r_i
+			self.set_r(i, r != (x && z));
+
+			// Set x_ia
+			self.set_x(i, qubit, z);
+			// Set z_ia
+			self.set_z(i, qubit, x);
+		}
+	}
+
+	pub fn s_gate(&mut self, qubit: usize) {
+		for i in 0..self.rows.len() {
+			let x = self.x(i, qubit);
+			let z = self.z(i, qubit);
+			let r = self.r(i);
+
+			// Set r_i
+			self.set_r(i, r != (x && z));
+
+			// Set z_ia
+			self.set_z(i, qubit, x != z);
+		}
+	}
+
+	pub fn x_gate(&mut self, qubit: usize) {
+        self.h_gate(qubit);
+        self.z_gate(qubit);
+        self.h_gate(qubit);
+
+	}
+
+	pub fn y_gate(&mut self, qubit: usize) {
+        self.x_gate(qubit);
+        self.z_gate(qubit);
+	}
+
+	pub fn z_gate(&mut self, qubit: usize) {
+		self.s_gate(qubit);
+		self.s_gate(qubit);
+	}
+
+	pub fn cx_gate(&mut self, qubit1: usize, qubit2: usize) {
+		for i in 0..self.rows.len() {
+			let x1 = self.x(i, qubit1);
+			let z1 = self.z(i, qubit1);
+			let x2 = self.x(i, qubit2);
+			let z2 = self.z(i, qubit2);
+
+			let r = self.r(i);
+
+			// Set r_i
+			self.set_r(i, r != ((x1 && z2) && ((x2 != z1) != true)));
+
+			// Set x2
+			self.set_x(i, qubit2, x1 != x2);
+
+			// Set z1
+			self.set_z(i, qubit1, z1 != z2);
+		}
+	}
+
+	pub fn mzr_qubit(&mut self, qubit: usize, mzr_outcome: bool) -> i32 {
+		// Must be tracking destabilizers to perform measurements
+		assert!(self.track_destabilizers);
+
+		let num_qubits: usize = self.rows.len()/2;
+
+		let mut found_p: bool = false;
+		let mut p: usize = 0;
+		for i in num_qubits..2*num_qubits {
+			if self.x(i, qubit) {
+				found_p = true;
+				p = i;
+				break;
+			}
+		}
+
+		if found_p {
+			for i in 0..2*num_qubits {
+				if i != p && self.x(i, qubit) {
+					self.rowsum(i, p);
+				}
+			}
+
+			self.rows[p - num_qubits] = self.rows[p].clone();
+			self.rows[p] = PauliString::new(num_qubits);
+			self.set_r(p, false);
+			let mut measured: i32 = 0;
+			if !mzr_outcome {
+				measured = 1;
+				self.set_r(p, true);
+			}
+			self.set_z(p, qubit, true);
+			return measured;
+
+		} else {
+			self.rows[2*num_qubits] = PauliString::new(num_qubits);
+			//BitVec::from_elem(2*self.num_qubits, false);
+			self.set_r(2*num_qubits, false);
+			for i in 0..num_qubits {
+				self.rowsum(2*num_qubits, i + num_qubits);
+			}
+
+			return self.r(2*num_qubits) as i32;
+		}
+
 	}
 }
 
@@ -198,28 +320,6 @@ pub struct QuantumCHPState {
 	tableau: Tableau,
 
 	rng: Lcg64Xsh32,
-}
-
-impl QuantumCHPState {
-
-	pub fn random_clifford<const N: usize>(&mut self, qubits: [usize; N]) {
-		let mut row1: PauliString = PauliString::rand(N, &mut self.rng);
-		let mut row2: PauliString = {
-			let mut anticommutes: bool = false;
-			let mut p: PauliString = PauliString::rand(N, &mut self.rng);
-			while !anticommutes {
-				if row1.anticommutes(&p) {
-					anticommutes = true;
-					break
-				}
-				anticommutes=true;
-			}
-
-			p
-		};
-
-		//println!("{}, {}", row1.to_string(true), row2.to_string(true));
-	}
 }
 
 impl QuantumState for QuantumCHPState {
@@ -238,103 +338,163 @@ impl QuantumState for QuantumCHPState {
 		return self.num_qubits;
 	}
 
-	fn h_gate(&mut self, qubit: usize) {
-		for i in 0..2*self.num_qubits {
-			let x = self.tableau.x(i, qubit);
-			let z = self.tableau.z(i, qubit);
-			let r = self.tableau.r(i);
+	// Generate a random clifford gate on N qubits following https://arxiv.org/pdf/2008.06011.pdf
+	fn random_clifford<const N: usize>(&mut self, qubits: [usize; N]) {
+		// First PauliString is totally random (non-identity)
+		let mut pauli1: PauliString = PauliString::rand(N, &mut self.rng);
 
-			// Set r_i
-			self.tableau.set_r(i, r != (x && z));
+		// Second is randomly generated until it anticommutes with the first PauliString
+		let mut pauli2: PauliString = {
+			let mut anticommutes: bool = false;
+			let mut pauli: PauliString = PauliString::rand(N, &mut self.rng);
+			while !anticommutes {
+				if pauli1.anticommutes(&pauli) {
+					anticommutes = true;
+					break
+				}
+				pauli = PauliString::rand(N, &mut self.rng);
+			}
+			pauli
+		};
 
-			// Set x_ia
-			self.tableau.set_x(i, qubit, z);
-			// Set z_ia
-			self.tableau.set_z(i, qubit, x);
-		}
-	}
+		let mut tableau: Tableau = Tableau { rows: vec![pauli1, pauli2] , track_destabilizers: false };
 
-	fn s_gate(&mut self, qubit: usize) {
-		for i in 0..2*self.num_qubits {
-			let x = self.tableau.x(i, qubit);
-			let z = self.tableau.z(i, qubit);
-			let r = self.tableau.r(i);
-
-			// Set r_i
-			self.tableau.set_r(i, r != (x && z));
-
-			// Set z_ia
-			self.tableau.set_z(i, qubit, x != z);
-		}
-	}
-
-	fn cx_gate(&mut self, qubit1: usize, qubit2: usize) {
-		for i in 0..2*self.num_qubits {
-			let x1 = self.tableau.x(i, qubit1);
-			let z1 = self.tableau.z(i, qubit1);
-			let x2 = self.tableau.x(i, qubit2);
-			let z2 = self.tableau.z(i, qubit2);
-
-			let r = self.tableau.r(i);
-
-			// Set r_i
-			self.tableau.set_r(i, r != ((x1 && z2) && ((x2 != z1) != true)));
-
-			// Set x2
-			self.tableau.set_x(i, qubit2, x1 != x2);
-
-			// Set z1
-			self.tableau.set_z(i, qubit1, z1 != z2);
-		}
-	}
-
-	fn cz_gate(&mut self, qubit1: usize, qubit2: usize) {
-		self.h_gate(qubit2);
-		self.cx_gate(qubit1, qubit2);
-		self.h_gate(qubit2);
-	}
-
-	fn mzr_qubit(&mut self, qubit: usize) -> i32 {
-		let mut found_p: bool = false;
-		let mut p: usize = 0;
-		for i in (self.num_qubits)..2*self.num_qubits {
-			if self.tableau.x(i, qubit) {
-				found_p = true;
-				p = i;
-				break;
+		// Step one: clear Z-block of first row
+		for i in 0..N {
+			if tableau.z(0, i) {
+				match tableau.x(0, i) {
+					true => {
+						tableau.s_gate(i);
+						self.s_gate(qubits[i]);
+					},
+					false => {
+						tableau.h_gate(i);
+						self.s_gate(qubits[i]);
+					},
+				}
 			}
 		}
 
-		if found_p {
-			for i in 0..2*self.num_qubits {
-				if i != p && self.tableau.x(i, qubit) {
-					self.tableau.rowsum(i, p);
+		// Step two: clear half of nonzero coefficients in X-block of first row
+		let mut nonzero_idxs: Vec<usize> = (0..N).filter(|i| tableau.x(0, *i))
+												 .map(|i| i)
+												 .collect();
+		while nonzero_idxs.len() > 1 {
+			for j in 0..nonzero_idxs.len()/2 {
+				tableau.cx_gate(nonzero_idxs[2*j], nonzero_idxs[2*j+1]);
+				self.cx_gate(qubits[nonzero_idxs[2*j]], qubits[nonzero_idxs[2*j+1]]);
+			}
+
+			nonzero_idxs = nonzero_idxs
+				.iter()
+				.enumerate()
+				.filter_map(|(i, x)| if i % 2 == 0 { Some(*x) } else { None } )
+				.collect();
+		}
+
+
+		// Step three
+		if nonzero_idxs[0] != 0 {
+			for i in 0..N {
+				if tableau.x(0, i) {
+					tableau.cx_gate(0, nonzero_idxs[0]);
+					tableau.cx_gate(nonzero_idxs[0], 0);
+					tableau.cx_gate(0, nonzero_idxs[0]);
+
+					self.cx_gate(qubits[0], qubits[nonzero_idxs[0]]);
+					self.cx_gate(qubits[nonzero_idxs[0]], qubits[0]);
+					self.cx_gate(qubits[0], qubits[nonzero_idxs[0]]);
+
+					break
+				}
+			}
+		}
+
+		// Step four
+		let mut Z1p: PauliString = PauliString::new(N);
+		Z1p.set_z(0, true);
+
+		let mut Z1m: PauliString = PauliString::new(N);
+		Z1m.set_z(0, true);
+		Z1m.set_r(true);
+
+		if tableau.rows[1] != Z1p && tableau.rows[1] != Z1m {
+			tableau.h_gate(0);
+			self.h_gate(qubits[0]);
+
+			// Repeat steps one and two
+			for i in 0..N {
+				if tableau.z(1, i) {
+					match tableau.x(1, i) {
+					true => {
+						tableau.s_gate(i);
+						self.s_gate(qubits[i]);
+					},
+					false => {
+						tableau.h_gate(i);
+						self.s_gate(qubits[i]);
+					},
+					}
 				}
 			}
 
-			self.tableau.rows[p - self.num_qubits] = self.tableau.rows[p].clone();
-			self.tableau.rows[p] = PauliString::new(self.num_qubits);
-			//BitVec::from_elem(2*self.num_qubits, false);
-			self.tableau.set_r(p, false);
-			let mut measured: i32 = 0;
-			if self.rng.next_u32() % 2 == 0 {
-				measured = 1;
-				self.tableau.set_r(p, true);
-			}
-			self.tableau.set_z(p, qubit, true);
-			return measured;
+			let mut nonzero_idxs: Vec<usize> = (0..N).filter(|i| tableau.x(1, *i))
+													.map(|i| i)
+													.collect();
+			while nonzero_idxs.len() > 1 {
+				for j in 0..nonzero_idxs.len()/2 {
+					tableau.cx_gate(nonzero_idxs[2*j], nonzero_idxs[2*j+1]);
+					self.cx_gate(qubits[nonzero_idxs[2*j]], qubits[nonzero_idxs[2*j+1]]);
+				}
 
-		} else {
-			self.tableau.rows[2*self.num_qubits] = PauliString::new(self.num_qubits);
-			//BitVec::from_elem(2*self.num_qubits, false);
-			self.tableau.set_r(2*self.num_qubits, false);
-			for i in 0..self.num_qubits {
-				self.tableau.rowsum(2*self.num_qubits, i + self.num_qubits);
+				nonzero_idxs = nonzero_idxs
+					.iter()
+					.enumerate()
+					.filter_map(|(i, x)| if i % 2 == 0 { Some(*x) } else { None } )
+					.collect();
 			}
 
-			return self.tableau.r(2*self.num_qubits) as i32;
+			tableau.h_gate(0);
+			self.h_gate(qubits[0]);
 		}
 
+		// Step five
+		match (tableau.r(0), tableau.r(1)) {
+			(false, true) => {
+				tableau.x_gate(0);
+				self.x_gate(qubits[0]);
+			},
+			(true, true) => {
+				tableau.y_gate(0);
+				self.y_gate(qubits[0]);
+			},
+			_ => {
+				tableau.z_gate(0);
+				self.z_gate(qubits[0]);
+			}
+		}
+	}
+
+	fn h_gate(&mut self, qubit: usize) {
+		self.tableau.h_gate(qubit);
+	}
+
+	fn s_gate(&mut self, qubit: usize) {
+		self.tableau.s_gate(qubit);
+	}
+
+	fn cx_gate(&mut self, qubit1: usize, qubit2: usize) {
+		self.tableau.cx_gate(qubit1, qubit2);
+	}
+
+	fn cz_gate(&mut self, qubit1: usize, qubit2: usize) {
+		self.tableau.h_gate(qubit2);
+		self.tableau.cx_gate(qubit1, qubit2);
+		self.tableau.h_gate(qubit2);
+	}
+
+	fn mzr_qubit(&mut self, qubit: usize) -> i32 {
+		self.tableau.mzr_qubit(qubit, self.rng.next_u32() % 2 == 0)
 	}
 }
 

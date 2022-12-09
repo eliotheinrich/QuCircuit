@@ -1,7 +1,7 @@
 {
-	"run_name": "fig2_800",
+	"run_name": "fig2_800_rc",
 	"simulator_type": "chp",
-	"circuit_type": "default",
+	"circuit_type": "random_clifford",
 	"system_sizes": [800],
 	"partition_sizes": [1, 2, 3, 4, 5, 7, 10, 11, 13, 16, 18, 23, 26, 32, 39, 44, 50, 57, 65, 73, 84, 95, 109, 125, 143, 166, 193, 227, 276],
 	"mzr_probs": [0.138],
@@ -11,5 +11,5 @@
 	"measurement_freq": 5,
 	"space_avg": true,
 	"spacing": 5,
-	"filename": "fig2_3.json"
+	"filename": "fig2_3_rc.json"
 }

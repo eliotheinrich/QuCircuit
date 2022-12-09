@@ -20,7 +20,8 @@ const fn _one() -> usize { 1 }
 struct EntropyJSONConfig {
     run_name: String,
 
-    simulator_type: u8,
+    circuit_type: String,
+    simulator_type: String,
 
     system_sizes: Vec<usize>,
     partition_sizes: Vec<usize>,
@@ -61,8 +62,14 @@ impl EntropyJSONConfig {
     }
 }
 
+enum CircuitType {
+    Default,
+    RandomClifford,
+}
+
 struct EntropyConfig {
-    simulator_type: u8,
+    circuit_type: CircuitType,
+    simulator_type: String,
 
     system_size: usize,
     partition_size: usize,
@@ -85,7 +92,14 @@ enum Gate {
     CX,
 }
 
-fn apply_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offset: bool, gate_type: &Gate) {
+fn polarize<Q: QuantumState>(quantum_state: &mut Q) {
+    for i in 0..quantum_state.system_size() {
+        quantum_state.h_gate(i);
+    }
+}
+
+
+fn apply_default_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offset: bool, gate_type: &Gate) {
     let system_size = quantum_state.system_size();
     for i in 0..system_size/2 {
         let mut qubit1 = if offset { (2*i + 1) % system_size } else { 2*i };
@@ -101,42 +115,70 @@ fn apply_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offs
     }
 }
 
-fn timestep<Q: QuantumState>(quantum_state: &mut Q, mzr_prob: f32) {
-    let mut rng = rand::thread_rng();
-    apply_layer(quantum_state, &mut rng, false, &Gate::CX);
-    apply_layer(quantum_state, &mut rng, false, &Gate::CZ);
+fn timesteps_default<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32) {
+    println!("Calling default timesteps");
+    let mut rng: ThreadRng = rand::thread_rng();
+    for i in 0..timesteps {
+        apply_default_layer(quantum_state, &mut rng, false, &Gate::CX);
+        apply_default_layer(quantum_state, &mut rng, false, &Gate::CZ);
 
-    apply_layer(quantum_state, &mut rng, true, &Gate::CX);
-    apply_layer(quantum_state, &mut rng, true, &Gate::CZ);
+        apply_default_layer(quantum_state, &mut rng, true, &Gate::CX);
+        apply_default_layer(quantum_state, &mut rng, true, &Gate::CZ);
 
-    for i in 0..quantum_state.system_size() {
-        if rng.gen::<f32>() < mzr_prob {
-            quantum_state.mzr_qubit(i);
-            quantum_state.h_gate(i);
+        for i in 0..quantum_state.system_size() {
+            if rng.gen::<f32>() < mzr_prob {
+                quantum_state.mzr_qubit(i);
+                quantum_state.h_gate(i);
+            }
         }
     }
 }
 
-fn polarize<Q: QuantumState>(quantum_state: &mut Q) {
-    for i in 0..quantum_state.system_size() {
-        quantum_state.h_gate(i);
+fn timesteps_random_clifford<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32) {
+    println!("Calling random clifford");
+    let system_size = quantum_state.system_size();
+    let mut rng: ThreadRng = rand::thread_rng();
+
+    for t in 0..timesteps/2 {
+        for i in 0..system_size/2 {
+            quantum_state.random_clifford([2*i, (2*i+1) % system_size]);
+        }
+
+        for i in 0..system_size {
+            if rng.gen::<f32>() < mzr_prob {
+                quantum_state.mzr_qubit(i);
+            }
+        }
+
+        for i in 0..system_size/2 {
+            quantum_state.random_clifford([(2*i+1)% system_size, (2*i+2)%system_size]);
+        }
+
+        for i in 0..system_size {
+            if rng.gen::<f32>() < mzr_prob {
+                quantum_state.mzr_qubit(i);
+            }
+        }
+
+
     }
 }
-
-fn do_timesteps<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32) {
-    for t in 0..timesteps {
-        timestep(quantum_state, mzr_prob);
-    }
-}
-
-
 
 
 impl EntropyConfig {
     pub fn from(json_config: &EntropyJSONConfig, system_size_idx: usize, timesteps_idx: usize, 
                                                  partition_size_idx: usize, mzr_idx: usize) -> Self {
         return EntropyConfig{
-            simulator_type: json_config.simulator_type,
+            circuit_type: match json_config.circuit_type.as_str() {
+                "default" => CircuitType::Default,
+                "random_clifford" => CircuitType::RandomClifford,
+                _ => {
+                    println!("circuit type {} not supported.", json_config.circuit_type);
+                    panic!();
+                }
+            },
+            simulator_type: json_config.simulator_type.clone(),
+
             system_size: json_config.system_sizes[system_size_idx],
             partition_size: json_config.partition_sizes[partition_size_idx],
             mzr_prob: json_config.mzr_probs[mzr_idx],
@@ -160,9 +202,16 @@ impl EntropyConfig {
         let mut entropy: Vec<Sample> = Vec::new();
 
         // Intially polarize in x-direction
-        polarize(quantum_state);
+        match self.circuit_type {
+            CircuitType::Default => {
+                polarize(quantum_state);
+                timesteps_default(quantum_state, self.equilibration_steps, self.mzr_prob);
+            },
+            CircuitType::RandomClifford => {
+                timesteps_random_clifford(quantum_state, self.equilibration_steps, self.mzr_prob);
+            },
+        }
 
-        do_timesteps(quantum_state, self.equilibration_steps, self.mzr_prob);
 
         // Do timesteps
         let (num_timesteps, num_intervals): (usize, usize) = if self.timesteps == 0 { 
@@ -173,7 +222,10 @@ impl EntropyConfig {
 
         
         for t in 0..num_intervals {
-            do_timesteps(quantum_state, num_timesteps, self.mzr_prob);
+            match self.circuit_type {
+                CircuitType::Default => timesteps_default(quantum_state, num_timesteps, self.mzr_prob),
+                CircuitType::RandomClifford => timesteps_random_clifford(quantum_state, num_timesteps, self.mzr_prob)
+            }
 
             let sample: Sample = 
             if self.space_avg {
@@ -230,10 +282,10 @@ impl EntropyConfig {
 
 impl RunConfig for EntropyConfig {
     fn init_state(&self) -> Simulator {
-        return match self.simulator_type {
-            0 => Simulator::CHP(QuantumCHPState::new(self.system_size)),
-            1 => Simulator::Graph(QuantumGraphState::new(self.system_size)),
-            2 => Simulator::Vector(QuantumVectorState::new(self.system_size)),
+        return match self.simulator_type.as_str() {
+            "chp" => Simulator::CHP(QuantumCHPState::new(self.system_size)),
+            "graph" => Simulator::Graph(QuantumGraphState::new(self.system_size)),
+            "vector" => Simulator::Vector(QuantumVectorState::new(self.system_size)),
             _ => {
                 println!("Error: simulator type provided not supported.");
                 panic!()
@@ -308,7 +360,7 @@ fn load_states(data_filename: String) -> Vec<Simulator> {
 */
 
 pub fn take_data(num_threads: usize, cfg_filename: &String) {
-    let cfg_path: String = String::from("configs/") + cfg_filename;
+    let cfg_path: String = cfg_filename.to_string();
     let json_config: EntropyJSONConfig = EntropyJSONConfig::load_json(&cfg_path);
     json_config.print();
 
