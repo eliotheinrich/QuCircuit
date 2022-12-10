@@ -143,8 +143,12 @@ fn timesteps_default<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, m
 fn timesteps_random_clifford<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32, gate_width: usize, init_offset: bool) {
     let system_size = quantum_state.system_size();
 
+    // System size must be divisible by gate width
     assert!(system_size % gate_width == 0);
+
+    // For now, gate width must be divisible by 2 for offset to function correctly
     assert!(gate_width % 2 == 0);
+
     let offset: usize = gate_width / 2;
     let num_gates: usize = system_size / gate_width;
 
@@ -157,11 +161,11 @@ fn timesteps_random_clifford<Q: QuantumState>(quantum_state: &mut Q, timesteps: 
         let qubits: Vec<usize> = (0..gate_width).map(|i| i % system_size).collect();
 
         for i in 0..num_gates {
-            let offset_qubits = 
+            let offset_qubits: Vec<usize> = 
             if offset_layer {
-                qubits.iter().map(|j| j + gate_width*i).collect()
+                qubits.iter().map(|j| (j + gate_width*i) % system_size).collect()
             } else {
-                qubits.iter().map(|j| j + (gate_width/2)*i).collect()
+                qubits.iter().map(|j| (j + gate_width*i + gate_width/2) % system_size).collect()
             };
             
             quantum_state.random_clifford(offset_qubits);
@@ -380,10 +384,10 @@ pub fn take_data(num_threads: usize, cfg_filename: &String) {
 
     let configs: Vec<EntropyConfig> = load_json_config(&json_config);
 
-    let mut pc = ParallelCompute::new(num_threads, configs);
+    let mut pc: ParallelCompute<EntropyConfig> = ParallelCompute::new(num_threads, configs);
     pc.add_int_param("equilibration_steps", json_config.equilibration_steps as i32);
     pc.add_int_param("measurement_freq", json_config.measurement_freq as i32);
-    let dataframe = pc.compute();
+    let dataframe: DataFrame = pc.compute();
     
     if json_config.save_data {
         let data_filename: String = String::from("data/") + &json_config.filename;
