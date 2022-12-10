@@ -2,6 +2,7 @@
 	"run_name": "timeseries_small_rc",
 	"simulator_type": "chp",
 	"circuit_type": "random_clifford",
+	"gate_width": 2,
 	"system_sizes": [800],
 	"partition_sizes": [400],
 	"mzr_probs": [0.138],
@@ -11,5 +12,5 @@
 	"spacing": 5,
 	"measurement_freq": 1,
 	"temporal_avg": false,
-	"filename": "timeseries_small_rc.json"
+	"filename": "timeseries_small_rc_2.json"
 }

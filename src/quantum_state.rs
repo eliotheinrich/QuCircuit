@@ -35,7 +35,7 @@ pub trait QuantumState {
 
     fn system_size(&self) -> usize;
 
-	fn random_clifford<const N: usize>(&mut self, qubits: [usize; N]) {
+	fn random_clifford(&mut self, qubits: Vec<usize>) {
         println!("random_clifford not implemented for this quantum state.");
         panic!();
     }

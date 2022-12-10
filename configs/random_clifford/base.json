@@ -2,6 +2,7 @@
 	"run_name": "base_rc",
 	"simulator_type": "chp",
 	"circuit_type": "random_clifford",
+	"gate_width": 2,
 	"system_sizes": [400],
 	"partition_sizes": [2, 4, 8, 12, 16, 25, 40, 80, 125, 150, 200],
 	"mzr_probs": [0.06, 0.08, 0.1, 0.138, 0.16],
@@ -11,5 +12,5 @@
 	"measurement_freq": 5,
 	"space_avg": true,
 	"spacing": 5,
-	"filename": "base_rc.json"
+	"filename": "base_rc_2.json"
 }

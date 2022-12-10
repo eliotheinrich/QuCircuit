@@ -339,20 +339,22 @@ impl QuantumState for QuantumCHPState {
 	}
 
 	// Generate a random clifford gate on N qubits following https://arxiv.org/pdf/2008.06011.pdf
-	fn random_clifford<const N: usize>(&mut self, qubits: [usize; N]) {
+	fn random_clifford(&mut self, qubits: Vec<usize>) {
+		let num_qubits: usize = qubits.len();
+		
 		// First PauliString is totally random (non-identity)
-		let mut pauli1: PauliString = PauliString::rand(N, &mut self.rng);
+		let mut pauli1: PauliString = PauliString::rand(num_qubits, &mut self.rng);
 
 		// Second is randomly generated until it anticommutes with the first PauliString
 		let mut pauli2: PauliString = {
 			let mut anticommutes: bool = false;
-			let mut pauli: PauliString = PauliString::rand(N, &mut self.rng);
+			let mut pauli: PauliString = PauliString::rand(num_qubits, &mut self.rng);
 			while !anticommutes {
 				if pauli1.anticommutes(&pauli) {
 					anticommutes = true;
 					break
 				}
-				pauli = PauliString::rand(N, &mut self.rng);
+				pauli = PauliString::rand(num_qubits, &mut self.rng);
 			}
 			pauli
 		};
@@ -360,7 +362,7 @@ impl QuantumState for QuantumCHPState {
 		let mut tableau: Tableau = Tableau { rows: vec![pauli1, pauli2] , track_destabilizers: false };
 
 		// Step one: clear Z-block of first row
-		for i in 0..N {
+		for i in 0..num_qubits {
 			if tableau.z(0, i) {
 				match tableau.x(0, i) {
 					true => {
@@ -376,7 +378,7 @@ impl QuantumState for QuantumCHPState {
 		}
 
 		// Step two: clear half of nonzero coefficients in X-block of first row
-		let mut nonzero_idxs: Vec<usize> = (0..N).filter(|i| tableau.x(0, *i))
+		let mut nonzero_idxs: Vec<usize> = (0..num_qubits).filter(|i| tableau.x(0, *i))
 												 .map(|i| i)
 												 .collect();
 		while nonzero_idxs.len() > 1 {
@@ -395,7 +397,7 @@ impl QuantumState for QuantumCHPState {
 
 		// Step three
 		if nonzero_idxs[0] != 0 {
-			for i in 0..N {
+			for i in 0..num_qubits {
 				if tableau.x(0, i) {
 					tableau.cx_gate(0, nonzero_idxs[0]);
 					tableau.cx_gate(nonzero_idxs[0], 0);
@@ -411,10 +413,10 @@ impl QuantumState for QuantumCHPState {
 		}
 
 		// Step four
-		let mut Z1p: PauliString = PauliString::new(N);
+		let mut Z1p: PauliString = PauliString::new(num_qubits);
 		Z1p.set_z(0, true);
 
-		let mut Z1m: PauliString = PauliString::new(N);
+		let mut Z1m: PauliString = PauliString::new(num_qubits);
 		Z1m.set_z(0, true);
 		Z1m.set_r(true);
 
@@ -423,7 +425,7 @@ impl QuantumState for QuantumCHPState {
 			self.h_gate(qubits[0]);
 
 			// Repeat steps one and two
-			for i in 0..N {
+			for i in 0..num_qubits {
 				if tableau.z(1, i) {
 					match tableau.x(1, i) {
 					true => {
@@ -438,7 +440,7 @@ impl QuantumState for QuantumCHPState {
 				}
 			}
 
-			let mut nonzero_idxs: Vec<usize> = (0..N).filter(|i| tableau.x(1, *i))
+			let mut nonzero_idxs: Vec<usize> = (0..num_qubits).filter(|i| tableau.x(1, *i))
 													.map(|i| i)
 													.collect();
 			while nonzero_idxs.len() > 1 {
