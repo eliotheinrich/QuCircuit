@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::os::unix::fs::symlink;
 
 use crate::quantum_chp_state::QuantumCHPState;
 use crate::quantum_graph_state::QuantumGraphState;
@@ -15,12 +16,17 @@ const fn _true() -> bool { true }
 const fn _false() -> bool { false }
 const fn _zero() -> usize { 0 }
 const fn _one() -> usize { 1 }
+const fn _two() -> usize { 2 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct EntropyJSONConfig {
     run_name: String,
 
     circuit_type: String,
+
+    #[serde(default = "_two")]
+    gate_width: usize,
+
     simulator_type: String,
 
     system_sizes: Vec<usize>,
@@ -69,6 +75,7 @@ enum CircuitType {
 
 struct EntropyConfig {
     circuit_type: CircuitType,
+    gate_width: usize,
     simulator_type: String,
 
     system_size: usize,
@@ -133,32 +140,36 @@ fn timesteps_default<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, m
     }
 }
 
-fn timesteps_random_clifford<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32) {
+fn timesteps_random_clifford<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32, init_offset: bool) {
     let system_size = quantum_state.system_size();
+    //assert!(system_size % gate_width == 0);
+    //assert!(gate_width % 2 == 0);
+    //let offset: usize = gate_width / 2;
+    //let num_gates: usize = system_size / gate_width;
+
     let mut rng: ThreadRng = rand::thread_rng();
 
-    for t in 0..timesteps/2 {
-        for i in 0..system_size/2 {
-            quantum_state.random_clifford([2*i, (2*i+1) % system_size]);
+    let mut offset_layer: bool = init_offset;
+
+    for t in 0..timesteps {
+
+        if offset_layer {
+            for i in 0..system_size/2 {
+                quantum_state.random_clifford([2*i, (2*i+1) % system_size]);
+            }
+        } else {
+            for i in 0..system_size/2 {
+                quantum_state.random_clifford([(2*i+1) % system_size, (2*i+2) % system_size]);
+            }
         }
+
+        offset_layer = !offset_layer;
 
         for i in 0..system_size {
             if rng.gen::<f32>() < mzr_prob {
                 quantum_state.mzr_qubit(i);
             }
         }
-
-        for i in 0..system_size/2 {
-            quantum_state.random_clifford([(2*i+1)% system_size, (2*i+2)%system_size]);
-        }
-
-        for i in 0..system_size {
-            if rng.gen::<f32>() < mzr_prob {
-                quantum_state.mzr_qubit(i);
-            }
-        }
-
-
     }
 }
 
@@ -175,6 +186,7 @@ impl EntropyConfig {
                     panic!();
                 }
             },
+            gate_width: json_config.gate_width,
             simulator_type: json_config.simulator_type.clone(),
 
             system_size: json_config.system_sizes[system_size_idx],
@@ -206,7 +218,7 @@ impl EntropyConfig {
                 timesteps_default(quantum_state, self.equilibration_steps, self.mzr_prob);
             },
             CircuitType::RandomClifford => {
-                timesteps_random_clifford(quantum_state, self.equilibration_steps, self.mzr_prob);
+                timesteps_random_clifford(quantum_state, self.equilibration_steps, self.mzr_prob, false);
             },
         }
 
@@ -217,12 +229,11 @@ impl EntropyConfig {
         } else { 
             (self.measurement_freq, self.timesteps/self.measurement_freq)
         };
-
         
         for t in 0..num_intervals {
             match self.circuit_type {
                 CircuitType::Default => timesteps_default(quantum_state, num_timesteps, self.mzr_prob),
-                CircuitType::RandomClifford => timesteps_random_clifford(quantum_state, num_timesteps, self.mzr_prob)
+                CircuitType::RandomClifford => timesteps_random_clifford(quantum_state, num_timesteps, self.mzr_prob, t*num_timesteps % 2 == 0),
             }
 
             let sample: Sample = 
