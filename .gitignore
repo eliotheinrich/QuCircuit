@@ -5,5 +5,7 @@ __pycache__
 *data.txt
 jobs
 *.sl
+*.out
+Cargo.lock
 .DS_Store
 data/*.json
