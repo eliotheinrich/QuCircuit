@@ -1,14 +1,15 @@
 {
 	"run_name": "timeseries",
-	"simulator_type": 0,
-	"system_sizes": [800],
-	"partition_sizes": [400],
+	"simulator_type": "chp",
+	"circuit_type": "default",
+	"system_sizes": [400],
+	"partition_sizes": [200],
 	"mzr_probs": [0.138],
-	"timesteps": [700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700, 700],
-	"num_runs": 10,
+	"timesteps": [500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500, 500],
+	"num_runs": 100,
 	"space_avg": true,
 	"spacing": 5,
-	"measurement_freq": 10,
+	"measurement_freq": 5,
 	"temporal_avg": false,
 	"filename": "timeseries.json"
 }

@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::fs;
+use std::os::unix::fs::symlink;
 
 use crate::quantum_chp_state::QuantumCHPState;
 use crate::quantum_graph_state::QuantumGraphState;
@@ -15,12 +17,18 @@ const fn _true() -> bool { true }
 const fn _false() -> bool { false }
 const fn _zero() -> usize { 0 }
 const fn _one() -> usize { 1 }
+const fn _two() -> usize { 2 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct EntropyJSONConfig {
     run_name: String,
 
-    simulator_type: u8,
+    circuit_type: String,
+
+    #[serde(default = "_two")]
+    gate_width: usize,
+
+    simulator_type: String,
 
     system_sizes: Vec<usize>,
     partition_sizes: Vec<usize>,
@@ -61,8 +69,15 @@ impl EntropyJSONConfig {
     }
 }
 
+enum CircuitType {
+    Default,
+    RandomClifford,
+}
+
 struct EntropyConfig {
-    simulator_type: u8,
+    circuit_type: CircuitType,
+    gate_width: usize,
+    simulator_type: String,
 
     system_size: usize,
     partition_size: usize,
@@ -85,7 +100,14 @@ enum Gate {
     CX,
 }
 
-fn apply_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offset: bool, gate_type: &Gate) {
+fn polarize<Q: QuantumState>(quantum_state: &mut Q) {
+    for i in 0..quantum_state.system_size() {
+        quantum_state.h_gate(i);
+    }
+}
+
+
+fn apply_default_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offset: bool, gate_type: &Gate) {
     let system_size = quantum_state.system_size();
     for i in 0..system_size/2 {
         let mut qubit1 = if offset { (2*i + 1) % system_size } else { 2*i };
@@ -101,42 +123,83 @@ fn apply_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offs
     }
 }
 
-fn timestep<Q: QuantumState>(quantum_state: &mut Q, mzr_prob: f32) {
-    let mut rng = rand::thread_rng();
-    apply_layer(quantum_state, &mut rng, false, &Gate::CX);
-    apply_layer(quantum_state, &mut rng, false, &Gate::CZ);
+fn timesteps_default<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32) {
+    let mut rng: ThreadRng = rand::thread_rng();
+    for i in 0..timesteps {
+        apply_default_layer(quantum_state, &mut rng, false, &Gate::CX);
+        apply_default_layer(quantum_state, &mut rng, false, &Gate::CZ);
 
-    apply_layer(quantum_state, &mut rng, true, &Gate::CX);
-    apply_layer(quantum_state, &mut rng, true, &Gate::CZ);
+        apply_default_layer(quantum_state, &mut rng, true, &Gate::CX);
+        apply_default_layer(quantum_state, &mut rng, true, &Gate::CZ);
 
-    for i in 0..quantum_state.system_size() {
-        if rng.gen::<f32>() < mzr_prob {
-            quantum_state.mzr_qubit(i);
-            quantum_state.h_gate(i);
+        for i in 0..quantum_state.system_size() {
+            if rng.gen::<f32>() < mzr_prob {
+                quantum_state.mzr_qubit(i);
+                quantum_state.h_gate(i);
+            }
         }
     }
 }
 
-fn polarize<Q: QuantumState>(quantum_state: &mut Q) {
-    for i in 0..quantum_state.system_size() {
-        quantum_state.h_gate(i);
-    }
-}
+fn timesteps_random_clifford<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32, gate_width: usize, init_offset: bool) {
+    let system_size = quantum_state.system_size();
 
-fn do_timesteps<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32) {
+    // System size must be divisible by gate width
+    assert!(system_size % gate_width == 0);
+
+    // For now, gate width must be divisible by 2 for offset to function correctly
+    assert!(gate_width % 2 == 0);
+
+    let offset: usize = gate_width / 2;
+    let num_gates: usize = system_size / gate_width;
+
+    let mut rng: ThreadRng = rand::thread_rng();
+
+    let mut offset_layer: bool = init_offset;
+
     for t in 0..timesteps {
-        timestep(quantum_state, mzr_prob);
+
+        let qubits: Vec<usize> = (0..gate_width).map(|i| i % system_size).collect();
+
+        for i in 0..num_gates {
+            let offset_qubits: Vec<usize> = 
+            if offset_layer {
+                qubits.iter().map(|j| (j + gate_width*i) % system_size).collect()
+            } else {
+                qubits.iter().map(|j| (j + gate_width*i + gate_width/2) % system_size).collect()
+            };
+            
+            quantum_state.random_clifford(offset_qubits);
+        }
+
+        offset_layer = !offset_layer;
+
+        for i in 0..system_size {
+            if rng.gen::<f32>() < mzr_prob {
+                quantum_state.mzr_qubit(i);
+            }
+        }
     }
 }
-
-
 
 
 impl EntropyConfig {
     pub fn from(json_config: &EntropyJSONConfig, system_size_idx: usize, timesteps_idx: usize, 
                                                  partition_size_idx: usize, mzr_idx: usize) -> Self {
-        return EntropyConfig{
-            simulator_type: json_config.simulator_type,
+        assert!(json_config.system_sizes[system_size_idx] >= json_config.partition_sizes[partition_size_idx]);
+        assert!(json_config.mzr_probs[mzr_idx] >= 0. && json_config.mzr_probs[mzr_idx] <= 1.);
+        EntropyConfig{
+            circuit_type: match json_config.circuit_type.as_str() {
+                "default" => CircuitType::Default,
+                "random_clifford" => CircuitType::RandomClifford,
+                _ => {
+                    println!("circuit type {} not supported.", json_config.circuit_type);
+                    panic!();
+                }
+            },
+            gate_width: json_config.gate_width,
+            simulator_type: json_config.simulator_type.clone(),
+
             system_size: json_config.system_sizes[system_size_idx],
             partition_size: json_config.partition_sizes[partition_size_idx],
             mzr_prob: json_config.mzr_probs[mzr_idx],
@@ -160,23 +223,33 @@ impl EntropyConfig {
         let mut entropy: Vec<Sample> = Vec::new();
 
         // Intially polarize in x-direction
-        polarize(quantum_state);
+        match self.circuit_type {
+            CircuitType::Default => {
+                polarize(quantum_state);
+                timesteps_default(quantum_state, self.equilibration_steps, self.mzr_prob);
+            },
+            CircuitType::RandomClifford => {
+                timesteps_random_clifford(quantum_state, self.equilibration_steps, self.mzr_prob, self.gate_width, false);
+            },
+        }
 
-        do_timesteps(quantum_state, self.equilibration_steps, self.mzr_prob);
 
         // Do timesteps
-        let (num_timesteps, num_intervals): (usize, usize) = if self.measurement_freq == 0 { 
-            (self.timesteps, 1) 
+        let (num_timesteps, num_intervals): (usize, usize) = if self.timesteps == 0 { 
+            (0, 1)
         } else { 
             (self.measurement_freq, self.timesteps/self.measurement_freq)
         };
         
         for t in 0..num_intervals {
-            do_timesteps(quantum_state, num_timesteps, self.mzr_prob);
+            match self.circuit_type {
+                CircuitType::Default => timesteps_default(quantum_state, num_timesteps, self.mzr_prob),
+                CircuitType::RandomClifford => timesteps_random_clifford(quantum_state, num_timesteps, self.mzr_prob, self.gate_width, t*num_timesteps % 2 == 0),
+            }
 
             let sample: Sample = 
             if self.space_avg {
-                let num_partitions = (self.system_size - self.partition_size)/self.spacing;
+                let num_partitions = std::cmp::max((self.system_size - self.partition_size)/self.spacing, 1);
 
                 let mut s: f32 = 0.;
                 let mut s2: f32 = 0.;
@@ -229,10 +302,10 @@ impl EntropyConfig {
 
 impl RunConfig for EntropyConfig {
     fn init_state(&self) -> Simulator {
-        return match self.simulator_type {
-            0 => Simulator::CHP(QuantumCHPState::new(self.system_size)),
-            1 => Simulator::Graph(QuantumGraphState::new(self.system_size)),
-            2 => Simulator::Vector(QuantumVectorState::new(self.system_size)),
+        return match self.simulator_type.as_str() {
+            "chp" => Simulator::CHP(QuantumCHPState::new(self.system_size)),
+            "graph" => Simulator::Graph(QuantumGraphState::new(self.system_size)),
+            "vector" => Simulator::Vector(QuantumVectorState::new(self.system_size)),
             _ => {
                 println!("Error: simulator type provided not supported.");
                 panic!()
@@ -244,12 +317,12 @@ impl RunConfig for EntropyConfig {
         assert!(self.num_runs > 0);
         let mut dataslide: DataSlide = DataSlide::new();
 
+        // Parameters
         dataslide.add_int_param("system_size", self.system_size as i32);
         dataslide.add_int_param("timesteps", self.timesteps as i32);
         dataslide.add_int_param("partition_size", self.partition_size as i32);
-        dataslide.add_int_param("measurement_freq", self.measurement_freq as i32);
-        dataslide.add_int_param("equilibration_steps", self.equilibration_steps as i32);
         dataslide.add_float_param("mzr_prob", self.mzr_prob);
+
         dataslide.add_data("entropy");
         
         match simulator {
@@ -307,18 +380,21 @@ fn load_states(data_filename: String) -> Vec<Simulator> {
 */
 
 pub fn take_data(num_threads: usize, cfg_filename: &String) {
-    let cfg_path: String = String::from("configs/") + cfg_filename;
+    let cfg_path: String = cfg_filename.to_string();
     let json_config: EntropyJSONConfig = EntropyJSONConfig::load_json(&cfg_path);
     json_config.print();
 
 
     let configs: Vec<EntropyConfig> = load_json_config(&json_config);
 
-    let mut pc = ParallelCompute::new(num_threads, configs);
-    let dataframe = pc.compute();
+    let mut pc: ParallelCompute<EntropyConfig> = ParallelCompute::new(num_threads, configs);
+    pc.add_int_param("equilibration_steps", json_config.equilibration_steps as i32);
+    pc.add_int_param("measurement_freq", json_config.measurement_freq as i32);
+    let dataframe: DataFrame = pc.compute();
     
     if json_config.save_data {
         let data_filename: String = String::from("data/") + &json_config.filename;
+        fs::remove_file(&data_filename);
         dataframe.save_json(data_filename);
     }
 }

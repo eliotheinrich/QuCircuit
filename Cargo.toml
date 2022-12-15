@@ -26,6 +26,3 @@ features = ["serde"]
 [dependencies.rand_pcg]
 version = "0.3.1"
 features = ["serde1"]
-
-[profile.release]
-debug = true

@@ -1,15 +1,16 @@
 {
-	"run_name": "timeseries_small",
+	"run_name": "timeseries_small_rc",
 	"simulator_type": "chp",
-	"circuit_type": "default",
+	"circuit_type": "random_clifford",
+	"gate_width": 4,
 	"system_sizes": [400],
 	"partition_sizes": [200],
 	"mzr_probs": [0.138],
 	"timesteps": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
-	"num_runs": 1000,
+	"num_runs": 10,
 	"space_avg": true,
 	"spacing": 5,
 	"measurement_freq": 1,
 	"temporal_avg": false,
-	"filename": "timeseries_small.json"
+	"filename": "timeseries_small_rc_4.json"
 }

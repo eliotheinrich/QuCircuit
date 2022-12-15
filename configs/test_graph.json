@@ -1,6 +1,7 @@
 {
-	"run_name": "test_chp",
-	"simulator_type": 1,
+	"run_name": "test_graph",
+	"simulator_type": "graph",
+	"circuit_type": "default",
 	"system_size": 100,
 	"partition_sizes": [10, 15, 20, 25, 30, 35, 40, 45, 50],
 	"mzr_probs": [0.06, 0.08, 0.1, 0.138, 0.16],
