@@ -413,14 +413,14 @@ impl QuantumState for QuantumCHPState {
 		}
 
 		// Step four
-		let mut Z1p: PauliString = PauliString::new(num_qubits);
-		Z1p.set_z(0, true);
+		let mut positive_Z1: PauliString = PauliString::new(num_qubits);
+		positive_Z1.set_z(0, true);
 
-		let mut Z1m: PauliString = PauliString::new(num_qubits);
-		Z1m.set_z(0, true);
-		Z1m.set_r(true);
+		let mut negative_Z1: PauliString = PauliString::new(num_qubits);
+		negative_Z1.set_z(0, true);
+		negative_Z1.set_r(true);
 
-		if tableau.rows[1] != Z1p && tableau.rows[1] != Z1m {
+		if tableau.rows[1] != positive_Z1 && tableau.rows[1] != negative_Z1 {
 			tableau.h_gate(0);
 			self.h_gate(qubits[0]);
 

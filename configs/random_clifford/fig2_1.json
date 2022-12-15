@@ -2,15 +2,15 @@
 	"run_name": "fig2_200_rc",
 	"simulator_type": "chp",
 	"circuit_type": "random_clifford",
-	"gate_width": 2,
+	"gate_width": 4,
 	"system_sizes": [200],
 	"partition_sizes": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 35, 38, 43, 48, 54, 62, 73, 100],
 	"mzr_probs": [0.138],
-	"timesteps": [98000],
+	"timesteps": [10000],
 	"equilibration_steps": 2000,
 	"temporal_avg": true,
-	"measurement_freq": 5,
+	"measurement_freq": 2,
 	"space_avg": true,
 	"spacing": 5,
-	"filename": "fig2_1_rc_2.json"
+	"filename": "fig2_1_rc_4.json"
 }

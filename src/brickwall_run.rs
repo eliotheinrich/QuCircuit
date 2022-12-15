@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fs;
 use std::os::unix::fs::symlink;
 
 use crate::quantum_chp_state::QuantumCHPState;
@@ -185,7 +186,9 @@ fn timesteps_random_clifford<Q: QuantumState>(quantum_state: &mut Q, timesteps: 
 impl EntropyConfig {
     pub fn from(json_config: &EntropyJSONConfig, system_size_idx: usize, timesteps_idx: usize, 
                                                  partition_size_idx: usize, mzr_idx: usize) -> Self {
-        return EntropyConfig{
+        assert!(json_config.system_sizes[system_size_idx] >= json_config.partition_sizes[partition_size_idx]);
+        assert!(json_config.mzr_probs[mzr_idx] >= 0. && json_config.mzr_probs[mzr_idx] <= 1.);
+        EntropyConfig{
             circuit_type: match json_config.circuit_type.as_str() {
                 "default" => CircuitType::Default,
                 "random_clifford" => CircuitType::RandomClifford,
@@ -246,7 +249,7 @@ impl EntropyConfig {
 
             let sample: Sample = 
             if self.space_avg {
-                let num_partitions = (self.system_size - self.partition_size)/self.spacing;
+                let num_partitions = std::cmp::max((self.system_size - self.partition_size)/self.spacing, 1);
 
                 let mut s: f32 = 0.;
                 let mut s2: f32 = 0.;
@@ -391,6 +394,7 @@ pub fn take_data(num_threads: usize, cfg_filename: &String) {
     
     if json_config.save_data {
         let data_filename: String = String::from("data/") + &json_config.filename;
+        fs::remove_file(&data_filename);
         dataframe.save_json(data_filename);
     }
 }

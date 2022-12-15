@@ -16,7 +16,7 @@ pub struct Sample {
 
 impl Sample {
 	pub fn new(s: f32) -> Sample {
-		return Sample{ mean: s, std: 0., num_samples: 1 };
+		return Sample { mean: s, std: 0., num_samples: 1 };
 	}
 
 	pub fn from(vec: &Vec<f32>) -> Sample {
@@ -204,6 +204,6 @@ impl<C: RunConfig + std::marker::Sync> ParallelCompute<C> {
             self.configs[i].gen_dataslide(state)
         }).collect();
 
-		return DataFrame{ params: self.params.clone(), slides: slides };
+		return DataFrame { params: self.params.clone(), slides: slides };
     }
 }
