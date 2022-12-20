@@ -1,10 +1,12 @@
 use bit_vec::BitVec;
+use num::complex::Complex;
 use rand_pcg::Lcg64Xsh32;
 use rand::{RngCore, SeedableRng};
 use serde::{Serialize, Deserialize};
 
-use crate::quantum_state::{Entropy, QuantumState};
+use crate::quantum_state::{Entropy, QuantumState, MzrForce};
 use crate::dataframe::DataField;
+use crate::quantum_vector_state::QuantumVectorState;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 struct PauliString {
@@ -104,25 +106,34 @@ impl PauliString {
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 struct Tableau {
 	rows: Vec<PauliString>,
+
 	track_destabilizers: bool,
+
+	pub print_ops: bool,
 }
 
 impl Tableau {
 	pub fn new(num_qubits: usize) -> Self {
 		let mut rows: Vec<PauliString> = vec![PauliString::new(num_qubits); 2*num_qubits + 1]; 
+
 		for i in 0..num_qubits {
 			rows[i].set_x(i, true);
 			rows[i + num_qubits].set_z(i, true);
 		}
 		
-		Tableau { rows: rows, track_destabilizers: true }
+		Tableau { rows: rows, track_destabilizers: true, print_ops: true}
+	}
+
+	fn num_rows(&self) -> usize {
+		// If tracking destabilizers, need an extra 'scratch row' which should not affect unitary operations
+		if self.track_destabilizers { self.rows.len() - 1 } else { self.rows.len() }
 	}
 
 	pub fn print(&self) -> String {
 		let mut s: String = String::new();
-		for i in 0..self.rows.len() {
+		for i in 0..self.num_rows() {
 			s.push_str(if i == 0 { "[" } else { " " });
-			s.push_str(&self.rows[i].to_string(true));
+			s.push_str(&self.rows[i].to_string(self.print_ops));
 			s.push_str(if i == 2*self.rows.len() - 1 { "]" } else { "\n" });
 		}
 		
@@ -131,14 +142,6 @@ impl Tableau {
 
 	fn x(&self, i: usize, j: usize) -> bool {
 		self.rows[i].x(j)
-	}
-
-	fn x_block(&self, i: usize) -> Vec<u8> {
-		(0..self.rows[i].num_qubits).map(|j| self.x(i, j) as u8).collect()
-	}
-
-	fn z_block(&self, i: usize) -> Vec<u8> {
-		(0..self.rows[i].num_qubits).map(|j| self.z(i, j) as u8).collect()
 	}
 
 	fn z(&self, i: usize, j: usize) -> bool {
@@ -165,27 +168,37 @@ impl Tableau {
 		if !x1 && !z1 { 
 			return 0 
 		} else if x1 && z1 { // z2 - x2
+			//return (z2 as i32) - (x2 as i32);
 			if z2 { return if x2 { 0 } else { 1 } }
 			else { return if x2 { -1 } else { 0 } }
 		} else if x1 && !z1 { // z2 * (2*x2 - 1)
+			//return (z2 as i32) * (2*(x2 as i32) - 1);
 			if z2 { return if x2 { 1 } else { -1 } }
 			else { return 0 }
 		} else { // x2 * (1 - 2*z2) 
+			//return (x2 as i32) * (1 - 2*(z2 as i32));
 			if x2 { return if z2 { -1 } else { 1 } }
 			else { return 0 }
 		}
 	}
 
 	pub fn rowsum(&mut self, h: usize, i: usize) {
+		println!("Calling rowsum({h}, {i})");
 		assert!(self.track_destabilizers);
 		let mut s: i32 = 0;
 		if self.r(i) { s += 2 }
 		if self.r(h) { s += 2 }
 
-		let num_qubits: usize = self.rows.len()/2;
+		let num_qubits: usize = self.num_rows()/2;
 		for j in 0..num_qubits {
-			s += Self::g(self.x(i, j), self.z(i, j), self.x(h, j), self.z(h, j));
+			let v = Self::g(self.x(i,j),self.z(i,j),self.x(h,j),self.z(h,j));
+			println!("g({}, {}) = {}", self.rows[i].to_op(j), self.rows[h].to_op(j), v);
+			s += v;
 		}
+		
+		println!("s = {s}");
+		//assert!(s % 2 == 0);
+
 		if s % 4 == 0 {
 			self.set_r(h, false);
 		} else if s % 4 == 2 {
@@ -196,10 +209,11 @@ impl Tableau {
 			self.set_x(h, j, self.x(i, j) != self.x(h, j));
 			self.set_z(h, j, self.z(i, j) != self.z(h, j));
 		}
+		println!("{}", self.print());
 	}
 
 	pub fn h_gate(&mut self, qubit: usize) {
-		for i in 0..self.rows.len() {
+		for i in 0..self.num_rows() {
 			let x = self.x(i, qubit);
 			let z = self.z(i, qubit);
 			let r = self.r(i);
@@ -215,7 +229,7 @@ impl Tableau {
 	}
 
 	pub fn s_gate(&mut self, qubit: usize) {
-		for i in 0..self.rows.len() {
+		for i in 0..self.num_rows() {
 			let x = self.x(i, qubit);
 			let z = self.z(i, qubit);
 			let r = self.r(i);
@@ -232,7 +246,6 @@ impl Tableau {
         self.h_gate(qubit);
         self.z_gate(qubit);
         self.h_gate(qubit);
-
 	}
 
 	pub fn y_gate(&mut self, qubit: usize) {
@@ -246,41 +259,52 @@ impl Tableau {
 	}
 
 	pub fn cx_gate(&mut self, qubit1: usize, qubit2: usize) {
-		for i in 0..self.rows.len() {
-			let x1 = self.x(i, qubit1);
-			let z1 = self.z(i, qubit1);
-			let x2 = self.x(i, qubit2);
-			let z2 = self.z(i, qubit2);
+		for i in 0..self.num_rows() {
+			let xa = self.x(i, qubit1);
+			let za = self.z(i, qubit1);
+			let xb = self.x(i, qubit2);
+			let zb = self.z(i, qubit2);
 
 			let r = self.r(i);
 
 			// Set r_i
-			self.set_r(i, r != ((x1 && z2) && ((x2 != z1) != true)));
+			self.set_r(i, r != ((xa && zb) && ((xb != za) != true)));
 
 			// Set x2
-			self.set_x(i, qubit2, x1 != x2);
+			self.set_x(i, qubit2, xa != xb);
 
 			// Set z1
-			self.set_z(i, qubit1, z1 != z2);
+			self.set_z(i, qubit1, za != zb);
 		}
 	}
 
+	pub fn mzr_deterministic(&self, qubit: usize) -> (bool, usize) {
+		assert!(self.track_destabilizers);
+		let num_qubits: usize = self.rows.len()/2;
+
+		for i in num_qubits..2*num_qubits {
+			if self.x(i, qubit) {
+				return (true, i);
+			}
+		}
+
+		return (false, 0);
+	}
+
 	pub fn mzr_qubit(&mut self, qubit: usize, mzr_outcome: bool) -> i32 {
+		println!("before: \n{}", self.print());
+		self.print_ops = false;
+		println!("{}", self.print());
+		self.print_ops = true;
+
 		// Must be tracking destabilizers to perform measurements
 		assert!(self.track_destabilizers);
 
 		let num_qubits: usize = self.rows.len()/2;
 
-		let mut found_p: bool = false;
-		let mut p: usize = 0;
-		for i in num_qubits..2*num_qubits {
-			if self.x(i, qubit) {
-				found_p = true;
-				p = i;
-				break;
-			}
-		}
+		let (found_p, p): (bool, usize) = self.mzr_deterministic(qubit);
 
+		println!("p = {p}");
 		if found_p {
 			for i in 0..2*num_qubits {
 				if i != p && self.x(i, qubit) {
@@ -288,21 +312,22 @@ impl Tableau {
 				}
 			}
 
+			println!("assigning {} to {}", self.rows[p].to_string(false), self.rows[p - num_qubits].to_string(false));
 			self.rows[p - num_qubits] = self.rows[p].clone();
 			self.rows[p] = PauliString::new(num_qubits);
-			self.set_r(p, false);
-			let mut measured: i32 = 0;
-			if !mzr_outcome {
-				measured = 1;
+			if mzr_outcome {
 				self.set_r(p, true);
 			}
 			self.set_z(p, qubit, true);
-			return measured;
+
+			println!("after: \n{}", self.print());
+			self.print_ops = false;
+			println!("{}", self.print());
+			self.print_ops = true;
+			return mzr_outcome as i32;
 
 		} else {
 			self.rows[2*num_qubits] = PauliString::new(num_qubits);
-			//BitVec::from_elem(2*self.num_qubits, false);
-			self.set_r(2*num_qubits, false);
 			for i in 0..num_qubits {
 				self.rowsum(2*num_qubits, i + num_qubits);
 			}
@@ -313,6 +338,96 @@ impl Tableau {
 	}
 }
 
+const ZERO : Complex<f32> = Complex::new(0., 0.);
+const ONE : Complex<f32> = Complex::new(1., 0.);
+const N_ONE : Complex<f32> = Complex::new(-1., 0.);
+const I : Complex<f32> = Complex::new(0., 1.);
+const N_I : Complex<f32> = Complex::new(0., -1.);
+const HALF : Complex<f32> = Complex::new(0.5, 0.);
+
+#[derive(Debug)]
+struct Matrix {
+	n: usize,
+	m: usize,
+	data: Vec<Vec<Complex<f32>>>,
+}
+
+impl std::ops::Index<usize> for Matrix {
+	type Output = Vec<Complex<f32>>;
+
+	fn index<'a>(&'a self, i: usize) -> &'a Vec<Complex<f32>> {
+		&self.data[i]
+	}
+}
+
+impl std::ops::IndexMut<usize> for Matrix {
+	fn index_mut<'a>(&'a mut self, i: usize) -> &'a mut Vec<Complex<f32>> {
+		&mut self.data[i]
+	}
+}
+
+impl Matrix {
+	pub fn new(n: usize, m: usize) -> Self {
+		Matrix { n: n, m: m, data: vec![vec![ZERO; m]; n] }
+	}
+
+	pub fn identity(n: usize) -> Self {
+		let mut identity = Matrix::new(n, n);
+		for i in 0..n {
+			identity[i][i] = ONE;
+		}
+		identity
+	}
+
+	pub fn scale(&mut self, f: Complex<f32>) {
+		for i in 0..self.n {
+			for j in 0..self.m {
+				self[i][j] *= f;
+			}
+		}
+	}
+
+	pub fn add(&self, other: &Matrix) -> Self {
+		assert!(self.n == other.n && self.m == other.m);
+		let mut result: Matrix = Matrix::new(self.n, self.m);
+		for i in 0..self.n {
+			for j in 0..self.m {
+				result[i][j] = self[i][j] + other[i][j];
+			}
+		}
+		return result
+
+	}
+
+	pub fn mul(&self, other: &Matrix) -> Self {
+		assert!(self.m == other.n);
+		let mut result: Matrix = Matrix::new(self.n, other.m);
+		for i in 0..self.n {
+			for j in 0..other.m {
+				for k in 0..self.m {
+					result[i][j] += self[i][k]*other[k][j];
+				}
+			}
+		}
+
+		result
+	}
+
+	pub fn kron(&self, other: &Matrix) -> Matrix {
+		let mut result: Matrix = Matrix::new(self.n*other.n, self.m*other.m);
+		for r in 0..self.n {
+			for s in 0..self.m {
+				for v in 0..other.n {
+					for w in 0..other.m {
+						result[other.n*r + v][other.m*s + w] = self[r][s]*other[v][w];
+					}
+				}
+			}
+		}
+		result
+	}
+}
+
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct QuantumCHPState {
@@ -320,6 +435,92 @@ pub struct QuantumCHPState {
 	tableau: Tableau,
 
 	rng: Lcg64Xsh32,
+}
+
+impl QuantumCHPState {
+	fn get_pauli(&self, i: usize, j: usize) -> Matrix {
+		let mut p: Matrix = Matrix::new(2, 2);
+		match self.tableau.rows[i].to_op(j) {
+			"I" => { // I
+				p[0][0] = ONE;
+				p[1][1] = ONE;
+			}
+			"X" => { // X
+				p[0][1] = ONE;
+				p[1][0] = ONE;
+			}
+			"Z" => { // Z
+				p[0][0] = ONE;
+				p[1][1] = N_ONE;
+			}
+			"Y" => { // Y
+				p[0][1] = N_I;
+				p[1][0] = I;
+			}
+			_ => panic!()
+		}
+
+		p
+	}
+
+	fn generator(&self, idx: usize) -> Matrix {
+		let mut g: Matrix = self.get_pauli(idx + self.num_qubits, 0);
+		for i in 1..self.num_qubits {
+			g = g.kron(&self.get_pauli(idx + self.num_qubits, i))
+		}
+
+		if self.tableau.r(idx + self.num_qubits) {
+			g.scale(N_ONE);
+		}
+
+		g
+	}
+
+	pub fn to_vector_state(&self) -> QuantumVectorState {
+		// Very slow; to be used for debugging small (n < 5) circuits
+		let identity: Matrix = Matrix::identity(1 << self.num_qubits);
+		let mut P: Matrix = Matrix::identity(1 << self.num_qubits);
+		for i in 0..self.num_qubits {
+			let g: Matrix = self.generator(i);
+			//println!("g = {}", self.tableau.rows[i + self.num_qubits].to_string(true));
+			P = P.mul(&g.add(&identity));
+			P.scale(HALF);
+		}
+
+		// P is the projector = |p><p|
+		let mut nonzero_basis: Vec<(usize, f32)> = Vec::new();
+		for i in 0..(1 << self.num_qubits) {
+			if P[i][i].re > 0.00001 || P[i][i].im > 0.00001 {
+				nonzero_basis.push((i, (P[i][i].re * P[i][i].re + P[i][i].im*P[i][i].im).sqrt()));
+			}
+		}
+
+		let mut vector_state: QuantumVectorState = QuantumVectorState::new(self.num_qubits);
+		vector_state.state.clear();
+
+		let r0: f32 = nonzero_basis[0].1;
+		let norm: f32 = (1./(nonzero_basis.len() as f32)).sqrt();
+		for j in 0..nonzero_basis.len() {
+			let i: usize = nonzero_basis[j].0;
+			let ri: f32 = nonzero_basis[j].1;
+			let phase: Complex<f32> = P[i][nonzero_basis[0].0]/(r0*ri);
+
+			let mut reversed_bits: usize = i;
+			for k in 0..self.num_qubits/2 {
+				// Swap bits
+				let p1 = k;
+				let p2 = self.num_qubits - 1 - k;
+				if (((reversed_bits & (1 << p1)) >> p1) ^ ((reversed_bits & (1 << p2)) >> p2)) != 0 {
+					reversed_bits ^= 1 << p1;
+					reversed_bits ^= 1 << p2;
+				}
+			}
+
+			vector_state.add_basis(reversed_bits as u64, ri*phase*norm);
+		}
+
+		vector_state
+	}
 }
 
 impl QuantumState for QuantumCHPState {
@@ -359,7 +560,7 @@ impl QuantumState for QuantumCHPState {
 			pauli
 		};
 
-		let mut tableau: Tableau = Tableau { rows: vec![pauli1, pauli2] , track_destabilizers: false };
+		let mut tableau: Tableau = Tableau { rows: vec![pauli1, pauli2], track_destabilizers: false, print_ops: true };
 
 		// Step one: clear Z-block of first row
 		for i in 0..num_qubits {
@@ -572,5 +773,18 @@ impl Entropy for QuantumCHPState {
 		}
 
 		return rank as f32 - qubits.len() as f32;
+	}
+}
+
+
+impl MzrForce for QuantumCHPState {
+	fn mzr_qubit_forced(&mut self, qubit: usize, outcome: bool) -> bool {
+		let (outcome_random, i): (bool, usize) = self.tableau.mzr_deterministic(qubit);
+		if outcome_random {
+			self.tableau.mzr_qubit(qubit, outcome);
+			return true
+		} else {
+			return self.mzr_qubit(qubit) == (outcome as i32);
+		}
 	}
 }

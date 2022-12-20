@@ -7,7 +7,7 @@ use crate::{quantum_chp_state::QuantumCHPState,
 
 use rayon::prelude::*;
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct Sample {
 	pub mean: f32,
 	pub std: f32,

@@ -1,0 +1,14 @@
+{
+	"run_name": "test1_small",
+	"simulator_type": "chp",
+	"circuit_type": "default",
+	"system_sizes": [10],
+	"partition_sizes": [5],
+	"mzr_probs": [0.138],
+	"num_runs": 100,
+	"equilibration_steps": 1000, 
+	"timesteps": [1000],
+	"temporal_avg": true,
+	"measurement_freq": 5,
+	"filename": "test1_small.json"
+}

@@ -5,7 +5,7 @@ use rand::{RngCore, SeedableRng};
 use serde::{Serialize, Deserialize};
 
 use crate::quantum_vector_state::QuantumVectorState;
-use crate::quantum_state::{Entropy, QuantumState, QuantumProgram};
+use crate::quantum_state::{Entropy, QuantumState, QuantumProgram, MzrForce};
 use crate::dataframe::DataField;
 
 const CONJUGATION_TABLE: [usize; 24] = [3, 6, 6, 3, 1, 1, 4, 4, 5, 2, 5, 2, 1, 1, 4, 4, 5, 2, 5, 2, 3, 6, 6, 3];
@@ -602,12 +602,12 @@ impl QuantumState for QuantumGraphState {
 				s += "\n";
 			}
 		}
-		return s;
-		//return format!("Graph:\n{}\n", self.graph.print());
+		
+		s
 	}
 
 	fn system_size(&self) -> usize {
-		return self.num_qubits;
+		self.num_qubits
 	}
 
     fn x_gate(&mut self, qubit: usize) {
@@ -785,5 +785,32 @@ impl Entropy for QuantumGraphState {
 
 
 		return entropy as f32;
+	}
+}
+
+impl MzrForce for QuantumGraphState {
+	fn mzr_qubit_forced(&mut self, qubit: usize, outcome: bool) -> bool {
+		let basis: usize = CONJUGATION_TABLE[self.graph.vals[qubit]];
+		let positive: i32 = (basis > 3) as i32;
+		let measured: i32 = match basis {
+			1 | 4 => {
+				if self.graph.degree(qubit) == 0 {
+					return (positive == 0) == outcome;
+				} else {
+					outcome as i32
+				}
+			} _ => outcome as i32,
+		};
+
+		//println!("basis = {basis}");
+		match basis {
+			1 | 4 => self.mxr_graph(qubit, measured ^ positive),
+			2 | 5 => self.myr_graph(qubit, measured ^ positive),
+			3 | 6 => self.mzr_graph(qubit, measured ^ positive),
+			_ => panic!()
+		};
+
+		return true;
+		
 	}
 }

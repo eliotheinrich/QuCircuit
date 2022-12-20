@@ -121,6 +121,10 @@ pub trait QuantumState {
     fn finish_execution(&mut self) {}
 }
 
+pub trait MzrForce {
+    fn mzr_qubit_forced(&mut self, qubit: usize, outcome: bool) -> bool;
+}
+
 pub trait Entropy {
     fn renyi_entropy(&self, qubits: &Vec<usize>) -> f32;
 }

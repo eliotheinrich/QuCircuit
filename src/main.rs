@@ -2,7 +2,9 @@ use quantum_circuit::brickwall_run::take_data;
 use std::time::Instant;
 
 
-fn compute_entropy_run(num_threads: usize, config_filename: &String) {
+fn compute_entropy_run(args: Vec<String>) {
+    let num_threads: usize = args[0].parse::<usize>().unwrap();
+    let config_filename: &String = &args[1];
 
     let now = Instant::now();
 
@@ -12,26 +14,26 @@ fn compute_entropy_run(num_threads: usize, config_filename: &String) {
     println!("Time: {:.2?}", elapsed);
 }
 
+
+fn default() {
+    println!("Success!");
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args[1] == "-e" {
-        let num_threads = args[2].parse::<usize>().unwrap();
-        let cfg_filename = &args[3];
-
-        
-        compute_entropy_run(num_threads, cfg_filename);
-    } else {
-        
+    if args.len() < 2 {
+        default();
+        return;
     }
 
-    /*
-    use quantum_circuit::quantum_chp_state::QuantumCHPState;
-    use quantum_circuit::quantum_state::QuantumState;
-    let num_qubits: usize = 10;
-    let mut state: QuantumCHPState = QuantumCHPState::new(num_qubits);
-    for i in 0..1 {
-        state.random_clifford([1, 3, 4]);
-    }
-    */
+    let flags: Vec<String> = args[1].chars().into_iter().map(|x| String::from(x)).collect();
+    assert!(flags[0] == "-");
 
+    match flags[1].as_str() {
+        "e" => compute_entropy_run(args[2..].to_vec()),
+        _ => {
+            println!("Not a valid run option.");
+            panic!();
+        }
+    }
 }

@@ -6,6 +6,6 @@ __pycache__
 jobs
 *.sl
 *.out
-Cargo.lock
+*.lock
 .DS_Store
 data/*.json

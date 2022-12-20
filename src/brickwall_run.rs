@@ -112,9 +112,11 @@ fn apply_default_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadR
     for i in 0..system_size/2 {
         let mut qubit1 = if offset { (2*i + 1) % system_size } else { 2*i };
         let mut qubit2 = if offset { (2*i + 2) % system_size } else { (2*i + 1) % system_size };
+        
         if rng.gen::<u8>() % 2 == 0 {
             std::mem::swap(&mut qubit1, &mut qubit2);
         }
+
 
         match gate_type {
             Gate::CZ => quantum_state.cz_gate(qubit1, qubit2),
@@ -123,7 +125,7 @@ fn apply_default_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadR
     }
 }
 
-fn timesteps_default<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32) {
+pub fn timesteps_default<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32) {
     let mut rng: ThreadRng = rand::thread_rng();
     for i in 0..timesteps {
         apply_default_layer(quantum_state, &mut rng, false, &Gate::CX);
@@ -264,6 +266,7 @@ impl EntropyConfig {
                 s /= num_partitions as f32;
                 s2 /= num_partitions as f32;
                 let std: f32 = (s2 - s.powi(2)).powf(0.5);
+                
                 Sample { mean: s, std: std, num_samples: num_partitions }
             } else {
                 Sample::new(quantum_state.renyi_entropy(&qubits))

@@ -1,6 +1,9 @@
+// TODO: Redo all unit tests; it's a mess in here.
+
 #[cfg(test)]
 pub mod tests {
 	use rand::Rng;
+	use rand::rngs::ThreadRng;
 	use rayon::prelude::*;
 
 	use crate::util;
@@ -8,7 +11,7 @@ pub mod tests {
 	use crate::quantum_chp_state::QuantumCHPState;
 	use crate::quantum_graph_state::QuantumGraphState;
 	use crate::quantum_vector_state::QuantumVectorState;
-	use crate::quantum_state::{QuantumProgram, QuantumState, Entropy};
+	use crate::quantum_state::{QuantumProgram, QuantumState, Entropy, MzrForce};
 	use crate::dataframe::Sample;
 
 	const EPS: f32 = 0.0001;
@@ -17,63 +20,98 @@ pub mod tests {
 		return (f1 - f2).abs() < EPS
 	}
 
+
+	#[derive(Debug)]
+	enum Instruction {
+		S(usize),
+		H(usize),
+		MZR(usize, bool),
+		CZ(usize, usize),
+
+	}
+
+	impl Instruction {
+		pub fn random(rng: &mut ThreadRng, num_qubits: usize) -> Self {
+			let num_cmds: u8 = if num_qubits > 1 { 4 } else { 3 };
+			match rng.gen::<u8>() % num_cmds {
+				0 => Instruction::S(rng.gen::<usize>() % num_qubits),
+				1 => Instruction::H(rng.gen::<usize>() % num_qubits),
+				2 => Instruction::MZR(rng.gen::<usize>() % num_qubits, rng.gen::<usize>() % 2 == 0),
+				3 => {
+					let r1 = rng.gen::<usize>() % num_qubits;
+					let mut r2 = rng.gen::<usize>() % num_qubits;
+					while r1 == r2 {
+						r2 = rng.gen::<usize>() % num_qubits;
+					}
+					Instruction::CZ(r1, r2)
+				}
+				_ => panic!()
+			}
+		}
+	}
+
+
 	#[test]
 	fn test_simulators() {
 		for i in 0..100 {
+			println!("{i}");
 			let circuit = util::generate_random_circuit(&util::GATES, 100, 10, 0);
-			let mut qc1 = QuantumProgram::<QuantumGraphState>::from_qasm(&circuit);
-			let mut qc2 = QuantumProgram::<QuantumVectorState>::from_qasm(&circuit);
+			let mut qc1 = QuantumProgram::<QuantumVectorState>::from_qasm(&circuit);
+			let mut qc2 = QuantumProgram::<QuantumGraphState>::from_qasm(&circuit);
+			let mut qc3 = QuantumProgram::<QuantumCHPState>::from_qasm(&circuit);
 			qc1.execute();
 			qc2.execute();
+			qc3.execute();
 
-			let mut qcp = QuantumProgram::<QuantumVectorState>::from_qasm(&qc1.quantum_state.debug_circuit());
-			qcp.execute();
-			let mut output1 = qcp.print();
-			let output1v: Vec<String> = output1.split("\n").map(|s| s.to_string()).collect();
-			output1 = output1v[0..output1v.len()-1].join("\n");
-			let mut output2 = qc2.print();
-			let output2v: Vec<String> = output2.split("\n").map(|s| s.to_string()).collect();
-			output2 = output2v[0..output2v.len()-1].join("\n");
-			println!("{}", qcp.quantum_state == qc2.quantum_state);
-			println!("graph: {}\nvector: {}", qcp.print(), qc2.print());
-			assert!(qcp.quantum_state == qc2.quantum_state);
+			let state1 = qc1.quantum_state;
+			let state2 = qc2.quantum_state.to_vector_state();
+			let state3 = qc3.quantum_state.to_vector_state();
+
+
+			assert!(state1 == state2);
+			assert!(state1 == state3);
+			assert!(state2 == state3);
 		}
 	}
 
+	use crate::brickwall_run::timesteps_default;
+
 	#[test]
-	pub fn test_entropy() {
-		let num_qubits = 30;
+	fn test_entropy() {
+		let num_qubits = 50;
 		let num_gates = 100;
-		let entropy: Vec<(f32, f32)> = 
-		(0..100).into_par_iter().map(|_| {
+		for i in 0..100 {
 			let mut rng = rand::thread_rng();
-			let circuit = util::generate_brick_wall_circuit(0.1, num_qubits, 100);
-			//util::generate_random_circuit(&util::GATES, num_gates, num_qubits, 0);
 			let qubits: Vec<usize> = (0..rng.gen::<usize>()%num_qubits).collect();
-			let mut program1 = QuantumProgram::<QuantumGraphState>::from_qasm(&circuit);
-			let mut program2 = QuantumProgram::<QuantumCHPState>::from_qasm(&circuit);
-			//let mut program3 = QuantumProgram::<QuantumVectorState>::from_qasm(&circuit);
-			program1.execute();
-			program2.execute();
-			//program3.execute();
+			//println!("qubits: {:?}", qubits);
+
+			let mut state1 = QuantumCHPState::new(num_qubits);
+			let mut state2 = QuantumGraphState::new(num_qubits);
+			//let mut state3 = QuantumVectorState::new(num_qubits);
+
+			timesteps_default(&mut state1, num_gates, 0.1);
+			timesteps_default(&mut state2, num_gates, 0.1);
+
+				//if !isclose(state1.renyi_entropy(&qubits), state3.renyi_entropy(&qubits)) {
+					//println!("After: ");
+					//println!("chp: \n{}, {}", state1.to_vector_state().print(), state1.renyi_entropy(&qubits));
+					//println!("vector: \n{}, {}", state3.print(), state3.renyi_entropy(&qubits));
+				//}
+			//}
 			
-			let graph_entropy = program1.quantum_state.renyi_entropy(&qubits);
-			let chp_entropy = program2.quantum_state.renyi_entropy(&qubits);
-			//let vector_entropy = program3.quantum_state.renyi_entropy(&qubits);
+			let chp_entropy = state1.renyi_entropy(&qubits);
+			//let vector_entropy = state3.renyi_entropy(&qubits);
+			let graph_entropy = state2.renyi_entropy(&qubits);
 
+			println!("{chp_entropy}, {graph_entropy}");
 
-			(graph_entropy, chp_entropy)//, vector_entropy)
-		}).collect();
-		
-		for s in entropy {
-			assert!(isclose(s.0, s.1)); 
+			assert!(isclose(graph_entropy, chp_entropy));
+
 		}
-
 	}
 
 	#[test]
-	pub fn test_sample() {
-
+	fn test_sample() {
 		let mut v1: Vec<f32> = vec![1.5, 3.2, 5.3, 2.2];
 		let m1: f32 = v1.iter().sum::<f32>()/(v1.len() as f32);
 		let s1: f32 = (v1.iter().map(|x| (x - m1).powi(2)).sum::<f32>()/(v1.len() as f32)).powf(0.5);
@@ -105,6 +143,92 @@ pub mod tests {
 
 
 
+	}
+	
+
+	#[test]
+	fn test_chp_vs_vector() {
+		let num_qubits: usize = 2;
+		let circuit_depth: usize = 30;
+		let mut rng = rand::thread_rng();
+		for i in 0..1 {
+			println!("run #{i}");
+
+			let mut state1 = QuantumCHPState::new(num_qubits);
+			let mut state2 = QuantumGraphState::new(num_qubits);
+			let mut state3 = QuantumVectorState::new(num_qubits);
+
+			//let circuit: Vec<Instruction> = (0..circuit_depth).map(|_| Instruction::random(&mut rng, num_qubits)).collect();
+			let circuit: Vec<Instruction> = vec![
+				Instruction::H(0), 
+				Instruction::S(1), 
+				Instruction::S(0), 
+				Instruction::S(1), 
+				Instruction::H(0), 
+				Instruction::CZ(1, 0), 
+				Instruction::H(1),
+				Instruction::CZ(1, 0), 
+				Instruction::MZR(1, true), 
+			];
+/* 
+			let circuit: Vec<Instruction> = vec![
+				Instruction::H(1),
+				Instruction::S(1),
+				Instruction::S(1),
+				Instruction::H(1),
+
+				Instruction::H(0),
+				Instruction::S(0),
+			];
+*/
+			let circuit_depth = circuit.len();
+			for j in 0..circuit_depth {
+				println!("before: ");
+				println!("chp: {}", state1.to_vector_state().print());
+				println!("{}", state1.print());
+				println!("graph: {}", state2.to_vector_state().print());
+				match circuit[j] {
+					Instruction::S(x) => {
+						state1.s_gate(x);
+						state2.s_gate(x);
+						state3.s_gate(x);
+					}
+					Instruction::H(x) => {
+						state1.h_gate(x);
+						state2.h_gate(x);
+						state3.h_gate(x);
+					}
+					Instruction::MZR(x, b) => {
+						if !state1.mzr_qubit_forced(x, b) {
+							state1.mzr_qubit_forced(x, !b);
+						}
+						if !state2.mzr_qubit_forced(x, b) {
+							state2.mzr_qubit_forced(x, !b);
+						}
+						if !state3.mzr_qubit_forced(x, b) {
+							state3.mzr_qubit_forced(x, !b);
+						}
+					}
+					Instruction::CZ(x, y) => {
+						state1.cz_gate(x, y);
+						state2.cz_gate(x, y);
+						state3.cz_gate(x, y);
+					}
+
+				}
+				println!("after: ");
+				println!("chp: {}", state1.to_vector_state().print());
+				println!("{}", state1.print());
+				println!("graph: {}", state2.to_vector_state().print());
+				if state1.to_vector_state() != state2.to_vector_state() {
+					panic!();
+				}
+			}
+			//println!("chp: \n{}", state1.to_vector_state().print());
+			//println!("{}", state1.print());
+			//println!("graph: \n{}", state2.to_vector_state().print());
+			//println!("vector: \n{}", state3.print());
+		}
 	}
 }
 

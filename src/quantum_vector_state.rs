@@ -4,7 +4,7 @@ use rand_pcg::Lcg64Xsh32;
 use rand::{RngCore, SeedableRng};
 use serde::{Serialize, Deserialize};
 
-use crate::quantum_state::{Entropy, QuantumState};
+use crate::quantum_state::{Entropy, QuantumState, MzrForce};
 use crate::dataframe::DataField;
 
 use std::f32::consts::SQRT_2;
@@ -18,7 +18,7 @@ const EPS : f32 = 1e-6;
 const HGATE: [Complex<f32>; 4] = [_SQRT2, _SQRT2, _SQRT2, N_SQRT2]; 
 
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BasisState {
     bits : u64,
     amp : Complex<f32>
@@ -49,6 +49,21 @@ pub struct QuantumVectorState {
 }
 
 impl QuantumVectorState {
+    pub fn add_basis(&mut self, bits: u64, amp: Complex<f32>) {
+        self.state.push(BasisState { bits: bits, amp: amp });
+    }
+
+    fn normalize(&mut self) {
+        let mut norm: f32 = 0.;
+        for b in &self.state {
+            norm += b.amp.norm().powi(2);
+        }
+        norm = norm.sqrt();
+        for b in &mut self.state {
+            b.amp /= norm;
+        }
+    }
+
     fn arbitrary_gate(&mut self, qubit: usize, gate: [Complex<f32>; 4]) {
         let bitshift: u64 = 1 << qubit;
         let mut new_state_map: HashMap<u64, Complex<f32>> = HashMap::new();
@@ -114,13 +129,11 @@ impl QuantumVectorState {
                         idx += (self.state[b1].qubit_val(qubits[j]) as usize) * (1 << j);
                         jdx += (self.state[b2].qubit_val(qubits[j]) as usize) * (1 << j);
                     }
-                    //println!("adding {:b} and {:b} to rho at {} {}", self.state[b1].bits, self.state[b2].bits, idx, jdx);
 					rho[idx][jdx] += self.state[b1].amp*self.state[b2].amp.conj()
                 }
             }
         }
 
-        //println!("{:?}", rho);
         return rho;
     }
 }
@@ -156,8 +169,16 @@ impl std::cmp::PartialEq for QuantumVectorState {
             return false;
         }
 
+        let mut state1: QuantumVectorState = self.clone();
+        state1.finish_execution();
+        let mut state2: QuantumVectorState = other.clone();
+        state2.finish_execution();
+
         for i in 0..self.state.len() {
-            if self.state[i] != other.state[i] { return false }
+            if state1.state[i] != state2.state[i] { 
+                println!("{:?} != {:?}", state1.state[i], state2.state[i]);
+                return false 
+            }
         }
 
         return true;
@@ -177,7 +198,8 @@ impl QuantumState for QuantumVectorState {
         let mut s : String = String::from("\n");
 
         for b in self.state.iter() {
-            s += &format!("{:0width$b}: {:.2}\n", b.bits as usize, b.amp, width = self.num_qubits);
+            let bits: String = format!("{:0width$b}", b.bits as usize, width=self.num_qubits).chars().rev().collect();
+            s += &format!("{}: {:.2}\n", bits, b.amp);
         }
         s = s[0..s.len()-1].to_string();
         return s
@@ -284,5 +306,29 @@ impl QuantumState for QuantumVectorState {
     fn finish_execution(&mut self) {
         self.fix_phase();
         self.sort_basis();
+    }
+}
+
+
+impl MzrForce for QuantumVectorState {
+    fn mzr_qubit_forced(&mut self, qubit: usize, outcome: bool) -> bool {
+        let mut valid: bool = false;
+        for b in &self.state {
+            if b.qubit_val(qubit) == outcome as u64 {
+                valid = true;
+                break;
+            }
+        }
+
+        if !valid { return false }
+
+        for b in &mut self.state {
+            if b.qubit_val(qubit) == outcome as u64 {  } else { b.amp = ZERO; }
+        }
+
+        self.normalize();
+
+        self.state.retain(|b| b.amp.norm() > EPS);
+        return true
     }
 }
