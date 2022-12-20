@@ -148,45 +148,18 @@ pub mod tests {
 
 	#[test]
 	fn test_chp_vs_vector() {
-		let num_qubits: usize = 2;
-		let circuit_depth: usize = 30;
+		let num_qubits: usize = 5;
+		let circuit_depth: usize = 100;
 		let mut rng = rand::thread_rng();
-		for i in 0..1 {
+		for i in 0..100 {
 			println!("run #{i}");
 
 			let mut state1 = QuantumCHPState::new(num_qubits);
 			let mut state2 = QuantumGraphState::new(num_qubits);
 			let mut state3 = QuantumVectorState::new(num_qubits);
 
-			//let circuit: Vec<Instruction> = (0..circuit_depth).map(|_| Instruction::random(&mut rng, num_qubits)).collect();
-			let circuit: Vec<Instruction> = vec![
-				Instruction::H(0), 
-				Instruction::S(1), 
-				Instruction::S(0), 
-				Instruction::S(1), 
-				Instruction::H(0), 
-				Instruction::CZ(1, 0), 
-				Instruction::H(1),
-				Instruction::CZ(1, 0), 
-				Instruction::MZR(1, true), 
-			];
-/* 
-			let circuit: Vec<Instruction> = vec![
-				Instruction::H(1),
-				Instruction::S(1),
-				Instruction::S(1),
-				Instruction::H(1),
-
-				Instruction::H(0),
-				Instruction::S(0),
-			];
-*/
-			let circuit_depth = circuit.len();
+			let circuit: Vec<Instruction> = (0..circuit_depth).map(|_| Instruction::random(&mut rng, num_qubits)).collect();
 			for j in 0..circuit_depth {
-				println!("before: ");
-				println!("chp: {}", state1.to_vector_state().print());
-				println!("{}", state1.print());
-				println!("graph: {}", state2.to_vector_state().print());
 				match circuit[j] {
 					Instruction::S(x) => {
 						state1.s_gate(x);
@@ -216,18 +189,10 @@ pub mod tests {
 					}
 
 				}
-				println!("after: ");
-				println!("chp: {}", state1.to_vector_state().print());
-				println!("{}", state1.print());
-				println!("graph: {}", state2.to_vector_state().print());
-				if state1.to_vector_state() != state2.to_vector_state() {
-					panic!();
-				}
 			}
-			//println!("chp: \n{}", state1.to_vector_state().print());
-			//println!("{}", state1.print());
-			//println!("graph: \n{}", state2.to_vector_state().print());
-			//println!("vector: \n{}", state3.print());
+			if state1.to_vector_state() != state2.to_vector_state() {
+				panic!();
+			}
 		}
 	}
 }

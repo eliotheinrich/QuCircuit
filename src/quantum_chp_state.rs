@@ -183,7 +183,6 @@ impl Tableau {
 	}
 
 	pub fn rowsum(&mut self, h: usize, i: usize) {
-		println!("Calling rowsum({h}, {i})");
 		assert!(self.track_destabilizers);
 		let mut s: i32 = 0;
 		if self.r(i) { s += 2 }
@@ -191,17 +190,12 @@ impl Tableau {
 
 		let num_qubits: usize = self.num_rows()/2;
 		for j in 0..num_qubits {
-			let v = Self::g(self.x(i,j),self.z(i,j),self.x(h,j),self.z(h,j));
-			println!("g({}, {}) = {}", self.rows[i].to_op(j), self.rows[h].to_op(j), v);
-			s += v;
+			s += Self::g(self.x(i,j), self.z(i,j), self.x(h,j), self.z(h,j));
 		}
 		
-		println!("s = {s}");
-		//assert!(s % 2 == 0);
-
 		if s % 4 == 0 {
 			self.set_r(h, false);
-		} else if s % 4 == 2 {
+		} else if (s % 4).abs() == 2 {
 			self.set_r(h, true);
 		}
 
@@ -209,7 +203,6 @@ impl Tableau {
 			self.set_x(h, j, self.x(i, j) != self.x(h, j));
 			self.set_z(h, j, self.z(i, j) != self.z(h, j));
 		}
-		println!("{}", self.print());
 	}
 
 	pub fn h_gate(&mut self, qubit: usize) {
@@ -292,11 +285,6 @@ impl Tableau {
 	}
 
 	pub fn mzr_qubit(&mut self, qubit: usize, mzr_outcome: bool) -> i32 {
-		println!("before: \n{}", self.print());
-		self.print_ops = false;
-		println!("{}", self.print());
-		self.print_ops = true;
-
 		// Must be tracking destabilizers to perform measurements
 		assert!(self.track_destabilizers);
 
@@ -304,7 +292,6 @@ impl Tableau {
 
 		let (found_p, p): (bool, usize) = self.mzr_deterministic(qubit);
 
-		println!("p = {p}");
 		if found_p {
 			for i in 0..2*num_qubits {
 				if i != p && self.x(i, qubit) {
@@ -312,18 +299,14 @@ impl Tableau {
 				}
 			}
 
-			println!("assigning {} to {}", self.rows[p].to_string(false), self.rows[p - num_qubits].to_string(false));
 			self.rows[p - num_qubits] = self.rows[p].clone();
 			self.rows[p] = PauliString::new(num_qubits);
+
 			if mzr_outcome {
 				self.set_r(p, true);
 			}
 			self.set_z(p, qubit, true);
 
-			println!("after: \n{}", self.print());
-			self.print_ops = false;
-			println!("{}", self.print());
-			self.print_ops = true;
 			return mzr_outcome as i32;
 
 		} else {
@@ -482,7 +465,6 @@ impl QuantumCHPState {
 		let mut P: Matrix = Matrix::identity(1 << self.num_qubits);
 		for i in 0..self.num_qubits {
 			let g: Matrix = self.generator(i);
-			//println!("g = {}", self.tableau.rows[i + self.num_qubits].to_string(true));
 			P = P.mul(&g.add(&identity));
 			P.scale(HALF);
 		}
@@ -699,21 +681,6 @@ impl QuantumState for QuantumCHPState {
 	fn mzr_qubit(&mut self, qubit: usize) -> i32 {
 		self.tableau.mzr_qubit(qubit, self.rng.next_u32() % 2 == 0)
 	}
-}
-
-fn print_tableau(tableau: &Vec<BitVec>) {
-	let rows = tableau.len();
-	let cols = tableau[0].len();
-	let mut s: String = String::new();
-	for i in 0..rows {
-		s.push_str(&format!("["));
-		for j in 0..cols {
-			s.push_str(&format!("{}", if tableau[i][j] { 1 } else { 0 }));
-			if j != cols - 1 { s.push_str(&format!(" ")); }
-		}
-		s.push_str(&format!("]\n"));
-	}
-	println!("{s}");
 }
 
 impl Entropy for QuantumCHPState {
