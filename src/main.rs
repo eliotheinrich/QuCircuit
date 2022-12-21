@@ -1,4 +1,4 @@
-use quantum_circuit::brickwall_run::take_data;
+use quantum_circuit::brickwall_run::{take_data, generate_states};
 use std::time::Instant;
 
 
@@ -9,6 +9,18 @@ fn compute_entropy_run(args: Vec<String>) {
     let now = Instant::now();
 
     take_data(num_threads, config_filename);
+
+    let elapsed = now.elapsed();
+    println!("Time: {:.2?}", elapsed);
+}
+
+fn generate_states_run(args: Vec<String>) {
+    let num_threads: usize = args[0].parse::<usize>().unwrap();
+    let config_filename: &String = &args[1];
+
+    let now = Instant::now();
+
+    generate_states(num_threads, config_filename);
 
     let elapsed = now.elapsed();
     println!("Time: {:.2?}", elapsed);
@@ -31,6 +43,7 @@ fn main() {
 
     match flags[1].as_str() {
         "e" => compute_entropy_run(args[2..].to_vec()),
+        "s" => generate_states_run(args[2..].to_vec()),
         _ => {
             println!("Not a valid run option.");
             panic!();

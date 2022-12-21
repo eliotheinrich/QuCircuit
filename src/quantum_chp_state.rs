@@ -121,7 +121,7 @@ impl Tableau {
 			rows[i + num_qubits].set_z(i, true);
 		}
 		
-		Tableau { rows: rows, track_destabilizers: true, print_ops: true}
+		Tableau { rows: rows, track_destabilizers: true, print_ops: false}
 	}
 
 	fn num_rows(&self) -> usize {

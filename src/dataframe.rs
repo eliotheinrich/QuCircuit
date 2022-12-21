@@ -68,6 +68,7 @@ impl Serialize for Sample {
 pub enum DataField {
 	Int(i32),
 	Float(f32),
+	Str(String),
 	Data(Vec<Sample>),
 }
 
@@ -119,6 +120,10 @@ impl DataSlide {
 		self.data.insert(String::from(key), DataField::Float(val));
 	}
 
+	pub fn add_string_param(&mut self, key: &str, val: &str) {
+		self.data.insert(String::from(key), DataField::Str(String::from(val)));
+	}
+
 	pub fn push_data(&mut self, key: &str, val: Sample) {
 		match self.data.get_mut(key).unwrap() {
 			DataField::Data(v) => v.push(val),
@@ -155,6 +160,13 @@ impl DataSlide {
 	pub fn unwrap_data(&self, key: &str) -> &Vec<Sample> {
 		match &self.data[key] {
 			DataField::Data(x) => x,
+			_ => panic!()
+		}
+	}
+
+	pub fn unwrap_str(&self, key: &str) -> String {
+		match &self.data[key] {
+			DataField::Str(x) => x.to_string(),
 			_ => panic!()
 		}
 	}

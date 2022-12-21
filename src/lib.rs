@@ -9,3 +9,6 @@ pub mod dataframe;
 pub mod tests;
 pub mod util;
 pub mod benchmarks;
+
+pub mod entropy_config;
+pub mod state_config;

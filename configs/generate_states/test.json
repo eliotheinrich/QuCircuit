@@ -1,0 +1,13 @@
+{
+	"run_name": "test_run",
+	"circuit_type": "quantum_automaton",
+	"simulator_type": "chp",
+
+    "system_size": 5,
+    "mzr_probs": [0.1, 0.2, 0.3],
+
+    "num_runs": 3,
+    "equilibration_steps": 100,
+
+	"filename": "test.json"
+}
