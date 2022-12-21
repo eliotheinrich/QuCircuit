@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fs;
-use std::os::unix::fs::symlink;
 
 use crate::quantum_chp_state::QuantumCHPState;
 use crate::quantum_graph_state::QuantumGraphState;
@@ -70,7 +69,7 @@ impl EntropyJSONConfig {
 }
 
 enum CircuitType {
-    Default,
+    QuantumAutomaton,
     RandomClifford,
 }
 
@@ -106,8 +105,8 @@ fn polarize<Q: QuantumState>(quantum_state: &mut Q) {
     }
 }
 
-
-fn apply_default_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offset: bool, gate_type: &Gate) {
+// Apply a quantum automaton layer
+fn apply_qa_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadRng, offset: bool, gate_type: &Gate) {
     let system_size = quantum_state.system_size();
     for i in 0..system_size/2 {
         let mut qubit1 = if offset { (2*i + 1) % system_size } else { 2*i };
@@ -125,14 +124,15 @@ fn apply_default_layer<Q: QuantumState>(quantum_state: &mut Q, rng: &mut ThreadR
     }
 }
 
-pub fn timesteps_default<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32) {
+// Apply some timesteps to the quantum automaton circuit
+pub fn timesteps_qa<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32) {
     let mut rng: ThreadRng = rand::thread_rng();
     for i in 0..timesteps {
-        apply_default_layer(quantum_state, &mut rng, false, &Gate::CX);
-        apply_default_layer(quantum_state, &mut rng, false, &Gate::CZ);
+        apply_qa_layer(quantum_state, &mut rng, false, &Gate::CX);
+        apply_qa_layer(quantum_state, &mut rng, false, &Gate::CZ);
 
-        apply_default_layer(quantum_state, &mut rng, true, &Gate::CX);
-        apply_default_layer(quantum_state, &mut rng, true, &Gate::CZ);
+        apply_qa_layer(quantum_state, &mut rng, true, &Gate::CX);
+        apply_qa_layer(quantum_state, &mut rng, true, &Gate::CZ);
 
         for i in 0..quantum_state.system_size() {
             if rng.gen::<f32>() < mzr_prob {
@@ -143,7 +143,7 @@ pub fn timesteps_default<Q: QuantumState>(quantum_state: &mut Q, timesteps: usiz
     }
 }
 
-fn timesteps_random_clifford<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32, gate_width: usize, init_offset: bool) {
+fn timesteps_rc<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_prob: f32, gate_width: usize, init_offset: bool) {
     let system_size = quantum_state.system_size();
 
     // System size must be divisible by gate width
@@ -192,7 +192,8 @@ impl EntropyConfig {
         assert!(json_config.mzr_probs[mzr_idx] >= 0. && json_config.mzr_probs[mzr_idx] <= 1.);
         EntropyConfig{
             circuit_type: match json_config.circuit_type.as_str() {
-                "default" => CircuitType::Default,
+                "default" => CircuitType::QuantumAutomaton,
+                "quantum_automaton" => CircuitType::QuantumAutomaton,
                 "random_clifford" => CircuitType::RandomClifford,
                 _ => {
                     println!("circuit type {} not supported.", json_config.circuit_type);
@@ -226,12 +227,12 @@ impl EntropyConfig {
 
         // Intially polarize in x-direction
         match self.circuit_type {
-            CircuitType::Default => {
+            CircuitType::QuantumAutomaton => {
                 polarize(quantum_state);
-                timesteps_default(quantum_state, self.equilibration_steps, self.mzr_prob);
+                timesteps_qa(quantum_state, self.equilibration_steps, self.mzr_prob);
             },
             CircuitType::RandomClifford => {
-                timesteps_random_clifford(quantum_state, self.equilibration_steps, self.mzr_prob, self.gate_width, false);
+                timesteps_rc(quantum_state, self.equilibration_steps, self.mzr_prob, self.gate_width, false);
             },
         }
 
@@ -245,8 +246,8 @@ impl EntropyConfig {
         
         for t in 0..num_intervals {
             match self.circuit_type {
-                CircuitType::Default => timesteps_default(quantum_state, num_timesteps, self.mzr_prob),
-                CircuitType::RandomClifford => timesteps_random_clifford(quantum_state, num_timesteps, self.mzr_prob, self.gate_width, t*num_timesteps % 2 == 0),
+                CircuitType::QuantumAutomaton => timesteps_qa(quantum_state, num_timesteps, self.mzr_prob),
+                CircuitType::RandomClifford => timesteps_rc(quantum_state, num_timesteps, self.mzr_prob, self.gate_width, t*num_timesteps % 2 == 0),
             }
 
             let sample: Sample = 
