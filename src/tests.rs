@@ -74,7 +74,7 @@ pub mod tests {
 		}
 	}
 
-	use crate::brickwall_run::timesteps_default;
+	use crate::brickwall_run::timesteps_qa;
 
 	#[test]
 	fn test_entropy() {
@@ -89,8 +89,8 @@ pub mod tests {
 			let mut state2 = QuantumGraphState::new(num_qubits);
 			//let mut state3 = QuantumVectorState::new(num_qubits);
 
-			timesteps_default(&mut state1, num_gates, 0.1);
-			timesteps_default(&mut state2, num_gates, 0.1);
+			timesteps_qa(&mut state1, num_gates, 0.1);
+			timesteps_qa(&mut state2, num_gates, 0.1);
 
 				//if !isclose(state1.renyi_entropy(&qubits), state3.renyi_entropy(&qubits)) {
 					//println!("After: ");
