@@ -7,3 +7,4 @@ jobs
 *.sl
 .DS_Store
 data/*.json
+Cargo.lock
