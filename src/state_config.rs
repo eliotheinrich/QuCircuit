@@ -126,7 +126,6 @@ impl RunConfig for StateConfig {
         let mut dataslide: DataSlide = DataSlide::new();
 
         // Parameters
-        dataslide.add_int_param("system_size", self.system_size as i32);
         dataslide.add_float_param("mzr_prob", self.mzr_prob);
 
         for i in 0..self.num_runs {
