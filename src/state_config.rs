@@ -138,7 +138,6 @@ impl RunConfig for StateConfig {
             }
         }
 
-        return dataslide;
-        
+        dataslide
     }
 }
