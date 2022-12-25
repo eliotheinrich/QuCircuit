@@ -144,6 +144,7 @@ pub fn generate_states(num_threads: usize, cfg_filename: &String) {
     let mut pc: ParallelCompute<StateConfig> = ParallelCompute::new(num_threads, configs);
     pc.add_int_param("equilibration_steps", json_config.equilibration_steps as i32);
     pc.add_int_param("system_size", json_config.system_size as i32);
+    pc.add_int_param("num_states", json_config.num_runs as i32);
     let dataframe: DataFrame = pc.compute();
     
     let data_filename: String = String::from("data/") + &json_config.filename;
