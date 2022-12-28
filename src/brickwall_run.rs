@@ -160,7 +160,6 @@ fn timesteps_rc<Q: QuantumState>(quantum_state: &mut Q, timesteps: usize, mzr_pr
     let mut offset_layer: bool = init_offset;
 
     for t in 0..timesteps {
-
         let qubits: Vec<usize> = (0..gate_width).map(|i| i % system_size).collect();
 
         for i in 0..num_gates {

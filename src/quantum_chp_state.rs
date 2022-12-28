@@ -22,6 +22,7 @@ impl PauliString {
 
 	// Generates a random non-identity PauliString
 	pub fn rand(num_qubits: usize, rng: &mut Lcg64Xsh32) -> Self {
+		assert!(num_qubits < 32); // TODO allow for larger random PauliStrings
 		let i: u32 = rng.next_u32() % (4_u32.pow(num_qubits as u32) - 1) + 1;
 		let mut bits: BitVec = BitVec::from_elem(2*num_qubits, false);
 		for j in 0..(2*num_qubits) {
@@ -80,11 +81,11 @@ impl PauliString {
 	}
 
 	pub fn commutes_at(&self, other: &PauliString, i: usize) -> bool {
-		if (self.x(i) == other.x(i)) && (self.z(i) == other.z(i)) {
+		if (self.x(i) == other.x(i)) && (self.z(i) == other.z(i)) { // ops are equal
 			true
-		} else if !self.x(i) && !self.z(i) {
+		} else if !self.x(i) && !self.z(i) { // self is identity
 			true
-		} else if !other.x(i) && !other.z(i) {
+		} else if !other.x(i) && !other.z(i) { // other is identity
 			true
 		} else {
 			false
@@ -95,11 +96,7 @@ impl PauliString {
 		let commuting_indices: usize = (0..self.num_qubits).map(|i| {
 			self.commutes_at(other, i)
 		}).filter(|i| *i).count();
-		commuting_indices % 2 == 1
-	}
-
-	pub fn anticommutes(&self, other: &PauliString) -> bool {
-		!self.commutes(other)
+		commuting_indices % 2 == 0
 	}
 }
 
@@ -533,7 +530,7 @@ impl QuantumState for QuantumCHPState {
 			let mut anticommutes: bool = false;
 			let mut pauli: PauliString = PauliString::rand(num_qubits, &mut self.rng);
 			while !anticommutes {
-				if pauli1.anticommutes(&pauli) {
+				if !pauli1.commutes(&pauli) {
 					anticommutes = true;
 					break
 				}
@@ -542,6 +539,7 @@ impl QuantumState for QuantumCHPState {
 			pauli
 		};
 
+		//println!("{}, {}, anticommutes: {}", pauli1.to_string(true), pauli2.to_string(true), !pauli1.commutes(&pauli2));
 		let mut tableau: Tableau = Tableau { rows: vec![pauli1, pauli2], track_destabilizers: false, print_ops: true };
 
 		// Step one: clear Z-block of first row
@@ -630,6 +628,7 @@ impl QuantumState for QuantumCHPState {
 				for j in 0..nonzero_idxs.len()/2 {
 					tableau.cx_gate(nonzero_idxs[2*j], nonzero_idxs[2*j+1]);
 					self.cx_gate(qubits[nonzero_idxs[2*j]], qubits[nonzero_idxs[2*j+1]]);
+					
 				}
 
 				nonzero_idxs = nonzero_idxs
