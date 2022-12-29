@@ -12,7 +12,7 @@ pub mod tests {
 	use crate::quantum_graph_state::QuantumGraphState;
 	use crate::quantum_vector_state::QuantumVectorState;
 	use crate::quantum_state::{QuantumProgram, QuantumState, Entropy, MzrForce};
-	use crate::dataframe::Sample;
+	use crate::dataframe::{Sample, DataSlide};
 
 	const EPS: f32 = 0.0001;
 
@@ -142,6 +142,31 @@ pub mod tests {
 
 
 
+
+	}
+
+	#[test]
+	fn test_dataslide() {
+		let mut ds1: DataSlide = DataSlide::new();
+		let mut ds2: DataSlide = DataSlide::new();
+		ds1.add_int_param("int1", 1);
+		ds2.add_int_param("int1", 1);
+
+		ds1.add_float_param("float1", 0.1);
+		ds2.add_float_param("float1", 0.1);
+
+		ds1.add_data("data_key");
+		ds1.push_data("data_key", Sample { mean: 0.5, std: 0.0, num_samples: 3 });
+		ds1.push_data("data_key", Sample { mean: 1.0, std: 0.0, num_samples: 8 });
+
+		ds2.add_data("data_key");
+		ds2.push_data("data_key", Sample { mean: 1.0, std: 0.0, num_samples: 3 });
+		ds2.push_data("data_key", Sample { mean: 1.5, std: 0.0, num_samples: 8 });
+
+
+		//let mut ds3 = ds1.combine(&ds2);
+		println!("{}", ds1.congruent(&ds2));
+		//println!("{:?}", ds3);
 
 	}
 	

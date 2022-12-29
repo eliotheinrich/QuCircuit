@@ -64,11 +64,36 @@ impl Serialize for Sample {
 }
 
 // Code for managing output data in runs
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum DataField {
 	Int(i32),
 	Float(f32),
 	Data(Vec<Sample>),
+}
+
+impl DataField {
+	pub fn congruent(&self, other: &DataField) -> bool {
+		match self {
+			DataField::Int(x) => {
+				match other {
+					DataField::Int(y) => return x == y,
+					_ => return false
+				}
+			},
+			DataField::Float(x) => {
+				match other {
+					DataField::Float(y) => return (x - y).abs()/x < 0.001,
+					_ => return false
+				}
+			},
+			DataField::Data(v) => {
+				match other {
+					DataField::Data(w) => return v.len() == w.len(),
+					_ => return false
+				}
+			}
+		}
+	}
 }
 
 #[derive(Serialize, Deserialize)]
@@ -100,7 +125,7 @@ impl DataFrame {
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DataSlide {
 	data: HashMap<String, DataField>,
 }
@@ -124,6 +149,24 @@ impl DataSlide {
 			DataField::Data(v) => v.push(val),
 			_ => ()
 		}
+	}
+
+	pub fn congruent(&self, other: &DataSlide) -> bool {
+		for key in self.data.keys() {
+			if !other.data.contains_key(key) { return false }
+		}
+
+		for key in other.data.keys() {
+			if !self.data.contains_key(key) { return false }
+		}
+
+		for (key, datafield) in &self.data {
+			if other.data.contains_key(key) {
+				if !datafield.congruent(&other.get_val(&key)) { return false }
+			}
+		}
+
+		true
 	}
 
 	pub fn add_data(&mut self, key: &str) {
@@ -158,7 +201,38 @@ impl DataSlide {
 			_ => panic!()
 		}
 	}
+
+	pub fn combine(&self, other: &DataSlide) -> DataSlide {
+		let mut dataslide: DataSlide = DataSlide::new();
+		assert!(self.congruent(other));
+
+		for (key, datafield) in &self.data {
+			match datafield {
+				DataField::Int(x) => dataslide.add_int_param(&key, *x),
+				DataField::Float(x) => dataslide.add_float_param(&key, *x),
+				DataField::Data(x) => {
+					match &other.data[key] {
+						DataField::Data(y) => {
+							dataslide.add_data(&key);
+							for i in 0..x.len() {
+								dataslide.push_data(&key, x[i].combine(&y[i]));
+							}
+						},
+						_ => {
+							println!("DataSlides cannot be combined.");
+							panic!();
+						}
+					}
+				}
+			}
+		}
+
+		dataslide
+	}
 }
+
+
+
 
 // Code for managing parallel computation of many configurable runs
 pub enum Simulator {
@@ -204,6 +278,27 @@ impl<C: RunConfig + std::marker::Sync> ParallelCompute<C> {
             self.configs[i].gen_dataslide(state)
         }).collect();
 
-		return DataFrame { params: self.params.clone(), slides: slides };
+
+		let mut avg_slides: Vec<DataSlide> = Vec::new();
+
+		for slide1 in &slides {
+			// Integrate with avg_slides
+			let mut idx: usize = 0;
+			let mut found_congruent: bool = false;
+			for (i, slide2) in avg_slides.iter().enumerate() {
+				if slide1.congruent(slide2) {
+					found_congruent = true;
+					idx = i;
+					break;
+				}
+			}
+			if found_congruent {
+				avg_slides[idx] = avg_slides[idx].combine(slide1);
+			} else {
+				avg_slides.push(slide1.clone());
+			}
+		}
+
+		DataFrame { params: self.params.clone(), slides: avg_slides }
     }
 }

@@ -279,17 +279,7 @@ impl EntropyConfig {
     }
 
     fn save_to_dataslide<Q: QuantumState + Entropy + Clone>(&self, dataslide: &mut DataSlide, quantum_state: &mut Q) {
-        let init_quantum_state = quantum_state.clone();
-
         let mut entropy: Vec<Sample> = self.compute_entropy(quantum_state);
-
-        for run in 0..(self.num_runs - 1) {
-            *quantum_state = init_quantum_state.clone(); // Reinitialize state
-            entropy = entropy.iter()
-                             .zip(self.compute_entropy(quantum_state).iter())
-                             .map(|(a, b)| a.combine(b))
-                             .collect();
-        }
 
         if self.temporal_avg {
             let sample: Sample = entropy.iter().fold(Sample { mean: 0., std: 0., num_samples: 0 }, |sum, val| sum.combine(val));
@@ -350,10 +340,12 @@ fn load_json_config(json_config: &EntropyJSONConfig) -> Vec<EntropyConfig> {
         for timesteps_idx in 0..json_config.timesteps.len() {
             for partition_size_idx in 0..json_config.partition_sizes.len() {
                 for mzr_prob_idx in 0..json_config.mzr_probs.len() {
-                    configs.push(EntropyConfig::from(&json_config, system_size_idx, 
-                                                                   timesteps_idx, 
-                                                                   partition_size_idx, 
-                                                                   mzr_prob_idx));
+                    for i in 0..json_config.num_runs {
+                        configs.push(EntropyConfig::from(&json_config, system_size_idx, 
+                                                                    timesteps_idx, 
+                                                                    partition_size_idx, 
+                                                                    mzr_prob_idx));
+                    }
                 }
             }
         }

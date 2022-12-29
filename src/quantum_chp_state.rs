@@ -1,4 +1,5 @@
 use bit_vec::BitVec;
+use std::collections::VecDeque;
 use num::complex::Complex;
 use rand_pcg::Lcg64Xsh32;
 use rand::{RngCore, SeedableRng};
@@ -22,14 +23,21 @@ impl PauliString {
 
 	// Generates a random non-identity PauliString
 	pub fn rand(num_qubits: usize, rng: &mut Lcg64Xsh32) -> Self {
-		assert!(num_qubits < 32); // TODO allow for larger random PauliStrings
-		let i: u32 = rng.next_u32() % (4_u32.pow(num_qubits as u32) - 1) + 1;
 		let mut bits: BitVec = BitVec::from_elem(2*num_qubits, false);
 		for j in 0..(2*num_qubits) {
-			bits.set(j, (i >> j & 1) != 0);
+			bits.set(j, rng.next_u32() % 2 == 0);
 		}
 
-		PauliString { num_qubits: num_qubits, bit_string: bits, phase: rng.next_u32() % 2 == 0 }
+
+		for j in 0..(2*num_qubits) {
+			// Need to check that at least one bit is 0 (i.e. the PauliString is not the identity)
+			if bits[j] {
+				return PauliString { num_qubits: num_qubits, bit_string: bits, phase: rng.next_u32() % 2 == 0 }
+			}
+		}
+
+		// If we generated the identity, try again
+		PauliString::rand(num_qubits, rng)
 	}
 
 	fn to_op(&self, i: usize) -> &str {
@@ -418,6 +426,303 @@ pub struct QuantumCHPState {
 }
 
 impl QuantumCHPState {
+	// Performs an iteration of the random clifford algorithm outlined in https://arxiv.org/pdf/2008.06011.pdf
+	fn random_clifford_iter(&mut self, qubits: &VecDeque<usize>) {
+		let num_qubits: usize = qubits.len();
+
+		// If there is one qubit, we just uniformly sample from the 24 single-qubit Clifford operators
+		if num_qubits == 0 {
+			match self.rng.next_u32() % 24 {
+				0 => (),
+				1 => self.x_gate(qubits[0]),
+				2 => self.y_gate(qubits[0]),
+				3 => self.z_gate(qubits[0]),
+
+				4 => {
+					self.h_gate(qubits[0]);
+					self.s_gate(qubits[0]);
+					self.h_gate(qubits[0]);
+					self.s_gate(qubits[0]);
+				},
+				5 => {
+					self.h_gate(qubits[0]);
+					self.s_gate(qubits[0]);
+					self.h_gate(qubits[0]);
+					self.s_gate(qubits[0]);
+					self.x_gate(qubits[0]);
+				},
+				6 => {
+					self.h_gate(qubits[0]);
+					self.s_gate(qubits[0]);
+					self.h_gate(qubits[0]);
+					self.s_gate(qubits[0]);
+					self.y_gate(qubits[0]);
+				},
+				7 => {
+					self.h_gate(qubits[0]);
+					self.s_gate(qubits[0]);
+					self.h_gate(qubits[0]);
+					self.s_gate(qubits[0]);
+					self.z_gate(qubits[0]);
+				},
+				8 => {
+					self.h_gate(qubits[0]);
+					self.s_gate(qubits[0]);
+				},
+				9 => {
+					self.h_gate(qubits[0]);
+					self.s_gate(qubits[0]);
+					self.x_gate(qubits[0]);
+				},
+				10 => {
+					self.h_gate(qubits[0]);
+					self.s_gate(qubits[0]);
+					self.y_gate(qubits[0]);
+				},
+				11 => {
+					self.h_gate(qubits[0]);
+					self.s_gate(qubits[0]);
+					self.z_gate(qubits[0]);
+				},
+				12 => {
+					self.h_gate(qubits[0]);
+				},
+				13 => {
+					self.h_gate(qubits[0]);
+					self.x_gate(qubits[0]);
+				},
+				14 => {
+					self.h_gate(qubits[0]);
+					self.y_gate(qubits[0]);
+				},
+				15 => {
+					self.h_gate(qubits[0]);
+					self.z_gate(qubits[0]);
+				},
+				16 => {
+					self.s_gate(qubits[0]);
+					self.h_gate(qubits[0]);
+					self.s_gate(qubits[0]);
+				},
+				17 => {
+					self.s_gate(qubits[0]);
+					self.h_gate(qubits[0]);
+					self.s_gate(qubits[0]);
+					self.x_gate(qubits[0]);
+				},
+				18 => {
+					self.s_gate(qubits[0]);
+					self.h_gate(qubits[0]);
+					self.s_gate(qubits[0]);
+					self.y_gate(qubits[0]);
+				},
+				19 => {
+					self.s_gate(qubits[0]);
+					self.h_gate(qubits[0]);
+					self.s_gate(qubits[0]);
+					self.z_gate(qubits[0]);
+				},
+				20 => {
+					self.s_gate(qubits[0]);
+				},
+				21 => {
+					self.s_gate(qubits[0]);
+					self.x_gate(qubits[0]);
+				},
+				22 => {
+					self.s_gate(qubits[0]);
+					self.y_gate(qubits[0]);
+				},
+				23 => {
+					self.s_gate(qubits[0]);
+					self.z_gate(qubits[0]);
+				},
+				_ => panic!()
+			}
+
+			return
+		}
+		// More than one qubit; proceed with algorithm
+
+		// First PauliString is totally random (non-identity)
+		let mut pauli1: PauliString = PauliString::rand(num_qubits, &mut self.rng);
+
+		// Second is randomly generated until it anticommutes with the first PauliString
+		let mut pauli2: PauliString = {
+			let mut commutes: bool = true;
+			let mut pauli: PauliString = PauliString::rand(num_qubits, &mut self.rng);
+			while commutes {
+				if !pauli1.commutes(&pauli) {
+					commutes = false;
+					break
+				}
+				pauli = PauliString::rand(num_qubits, &mut self.rng);
+			}
+			pauli
+		};
+
+		/* Initial Paulis for debugging
+		match num_qubits {
+			1 => {
+				pauli1 = PauliString::new(1);
+				pauli1.set_z(0, true);
+				pauli2 = PauliString::new(1);
+				pauli2.set_x(0, true);
+			},
+			2 => {
+				pauli1 = PauliString::new(2);
+				pauli1.set_x(1, true);
+				pauli2 = PauliString::new(2);
+				pauli2.set_z(1, true);
+			},
+			3 => {
+				pauli1 = PauliString::new(3);
+				pauli1.set_z(1, true);
+				pauli2 = PauliString::new(3);
+				pauli2.set_x(0, true);
+				pauli2.set_x(1, true);
+				pauli2.set_z(0, true);
+				pauli2.set_z(1, true);
+			},
+			4 => {
+				pauli1 = PauliString::new(4);
+				pauli1.set_x(0, true);
+				pauli1.set_x(1, true);
+				pauli1.set_x(2, true);
+				pauli1.set_x(3, true);
+				pauli1.set_z(1, true);
+				pauli1.set_z(2, true);
+				pauli2 = PauliString::new(4);
+				pauli2.set_x(0, true);
+				pauli2.set_x(1, true);
+				pauli2.set_x(2, true);
+				pauli2.set_x(3, true);
+				pauli2.set_z(0, true);
+				pauli2.set_z(1, true);
+				pauli2.set_z(2, true);
+			}, _ => ()
+		} */
+
+		let mut tableau: Tableau = Tableau { rows: vec![pauli1, pauli2], track_destabilizers: false, print_ops: true };
+
+		// Step one: clear Z-block of first row
+		for i in 0..num_qubits {
+			if tableau.z(0, i) {
+				match tableau.x(0, i) {
+					true => {
+						tableau.s_gate(i);
+						self.s_gate(qubits[i]);
+					},
+					false => {
+						tableau.h_gate(i);
+						self.h_gate(qubits[i]);
+					},
+				}
+			}
+		}
+
+		// Step two: clear half of nonzero coefficients in X-block of first row
+		let mut nonzero_idxs: Vec<usize> = (0..num_qubits).filter(|i| tableau.x(0, *i))
+												 .map(|i| i)
+												 .collect();
+		while nonzero_idxs.len() > 1 {
+			for j in 0..nonzero_idxs.len()/2 {
+				tableau.cx_gate(nonzero_idxs[2*j], nonzero_idxs[2*j+1]);
+				self.cx_gate(qubits[nonzero_idxs[2*j]], qubits[nonzero_idxs[2*j+1]]);
+			}
+
+			nonzero_idxs = nonzero_idxs
+				.iter()
+				.enumerate()
+				.filter_map(|(i, x)| if i % 2 == 0 { Some(*x) } else { None } )
+				.collect();
+		}
+
+
+		// Step three
+		if nonzero_idxs[0] != 0 {
+			for i in 0..num_qubits {
+				if tableau.x(0, i) {
+					tableau.cx_gate(0, nonzero_idxs[0]);
+					tableau.cx_gate(nonzero_idxs[0], 0);
+					tableau.cx_gate(0, nonzero_idxs[0]);
+
+					self.cx_gate(qubits[0], qubits[nonzero_idxs[0]]);
+					self.cx_gate(qubits[nonzero_idxs[0]], qubits[0]);
+					self.cx_gate(qubits[0], qubits[nonzero_idxs[0]]);
+
+					break
+				}
+			}
+		}
+
+		// Step four
+		let mut positive_Z1: PauliString = PauliString::new(num_qubits);
+		positive_Z1.set_z(0, true);
+
+		let mut negative_Z1: PauliString = PauliString::new(num_qubits);
+		negative_Z1.set_z(0, true);
+		negative_Z1.set_r(true);
+
+		if tableau.rows[1] != positive_Z1 && tableau.rows[1] != negative_Z1 {
+			tableau.h_gate(0);
+			self.h_gate(qubits[0]);
+
+			// Repeat steps one...
+			for i in 0..num_qubits {
+				if tableau.z(1, i) {
+					match tableau.x(1, i) {
+					true => {
+						tableau.s_gate(i);
+						self.s_gate(qubits[i]);
+					},
+					false => {
+						tableau.h_gate(i);
+						self.s_gate(qubits[i]);
+					},
+					}
+				}
+			}
+
+			// ...and two
+			let mut nonzero_idxs: Vec<usize> = (0..num_qubits).filter(|i| tableau.x(1, *i))
+													.map(|i| i)
+													.collect();
+			while nonzero_idxs.len() > 1 {
+				for j in 0..nonzero_idxs.len()/2 {
+					tableau.cx_gate(nonzero_idxs[2*j], nonzero_idxs[2*j+1]);
+					self.cx_gate(qubits[nonzero_idxs[2*j]], qubits[nonzero_idxs[2*j+1]]);
+					
+				}
+
+				nonzero_idxs = nonzero_idxs
+					.iter()
+					.enumerate()
+					.filter_map(|(i, x)| if i % 2 == 0 { Some(*x) } else { None } )
+					.collect();
+			}
+
+			tableau.h_gate(0);
+			self.h_gate(qubits[0]);
+		}
+
+		// Step five
+		match (tableau.r(0), tableau.r(1)) {
+			(false, true) => {
+				tableau.x_gate(0);
+				self.x_gate(qubits[0]);
+			},
+			(true, true) => {
+				tableau.y_gate(0);
+				self.y_gate(qubits[0]);
+			},
+			_ => {
+				tableau.z_gate(0);
+				self.z_gate(qubits[0]);
+			}
+		}
+	}
+
 	fn get_pauli(&self, i: usize, j: usize) -> Matrix {
 		let mut p: Matrix = Matrix::new(2, 2);
 		match self.tableau.rows[i].to_op(j) {
@@ -521,141 +826,10 @@ impl QuantumState for QuantumCHPState {
 	// Generate a random clifford gate on N qubits following https://arxiv.org/pdf/2008.06011.pdf
 	fn random_clifford(&mut self, qubits: Vec<usize>) {
 		let num_qubits: usize = qubits.len();
-		
-		// First PauliString is totally random (non-identity)
-		let mut pauli1: PauliString = PauliString::rand(num_qubits, &mut self.rng);
-
-		// Second is randomly generated until it anticommutes with the first PauliString
-		let mut pauli2: PauliString = {
-			let mut anticommutes: bool = false;
-			let mut pauli: PauliString = PauliString::rand(num_qubits, &mut self.rng);
-			while !anticommutes {
-				if !pauli1.commutes(&pauli) {
-					anticommutes = true;
-					break
-				}
-				pauli = PauliString::rand(num_qubits, &mut self.rng);
-			}
-			pauli
-		};
-
-		//println!("{}, {}, anticommutes: {}", pauli1.to_string(true), pauli2.to_string(true), !pauli1.commutes(&pauli2));
-		let mut tableau: Tableau = Tableau { rows: vec![pauli1, pauli2], track_destabilizers: false, print_ops: true };
-
-		// Step one: clear Z-block of first row
+		let mut qubits_deq: VecDeque<usize> = VecDeque::from(qubits);
 		for i in 0..num_qubits {
-			if tableau.z(0, i) {
-				match tableau.x(0, i) {
-					true => {
-						tableau.s_gate(i);
-						self.s_gate(qubits[i]);
-					},
-					false => {
-						tableau.h_gate(i);
-						self.s_gate(qubits[i]);
-					},
-				}
-			}
-		}
-
-		// Step two: clear half of nonzero coefficients in X-block of first row
-		let mut nonzero_idxs: Vec<usize> = (0..num_qubits).filter(|i| tableau.x(0, *i))
-												 .map(|i| i)
-												 .collect();
-		while nonzero_idxs.len() > 1 {
-			for j in 0..nonzero_idxs.len()/2 {
-				tableau.cx_gate(nonzero_idxs[2*j], nonzero_idxs[2*j+1]);
-				self.cx_gate(qubits[nonzero_idxs[2*j]], qubits[nonzero_idxs[2*j+1]]);
-			}
-
-			nonzero_idxs = nonzero_idxs
-				.iter()
-				.enumerate()
-				.filter_map(|(i, x)| if i % 2 == 0 { Some(*x) } else { None } )
-				.collect();
-		}
-
-
-		// Step three
-		if nonzero_idxs[0] != 0 {
-			for i in 0..num_qubits {
-				if tableau.x(0, i) {
-					tableau.cx_gate(0, nonzero_idxs[0]);
-					tableau.cx_gate(nonzero_idxs[0], 0);
-					tableau.cx_gate(0, nonzero_idxs[0]);
-
-					self.cx_gate(qubits[0], qubits[nonzero_idxs[0]]);
-					self.cx_gate(qubits[nonzero_idxs[0]], qubits[0]);
-					self.cx_gate(qubits[0], qubits[nonzero_idxs[0]]);
-
-					break
-				}
-			}
-		}
-
-		// Step four
-		let mut positive_Z1: PauliString = PauliString::new(num_qubits);
-		positive_Z1.set_z(0, true);
-
-		let mut negative_Z1: PauliString = PauliString::new(num_qubits);
-		negative_Z1.set_z(0, true);
-		negative_Z1.set_r(true);
-
-		if tableau.rows[1] != positive_Z1 && tableau.rows[1] != negative_Z1 {
-			tableau.h_gate(0);
-			self.h_gate(qubits[0]);
-
-			// Repeat steps one and two
-			for i in 0..num_qubits {
-				if tableau.z(1, i) {
-					match tableau.x(1, i) {
-					true => {
-						tableau.s_gate(i);
-						self.s_gate(qubits[i]);
-					},
-					false => {
-						tableau.h_gate(i);
-						self.s_gate(qubits[i]);
-					},
-					}
-				}
-			}
-
-			let mut nonzero_idxs: Vec<usize> = (0..num_qubits).filter(|i| tableau.x(1, *i))
-													.map(|i| i)
-													.collect();
-			while nonzero_idxs.len() > 1 {
-				for j in 0..nonzero_idxs.len()/2 {
-					tableau.cx_gate(nonzero_idxs[2*j], nonzero_idxs[2*j+1]);
-					self.cx_gate(qubits[nonzero_idxs[2*j]], qubits[nonzero_idxs[2*j+1]]);
-					
-				}
-
-				nonzero_idxs = nonzero_idxs
-					.iter()
-					.enumerate()
-					.filter_map(|(i, x)| if i % 2 == 0 { Some(*x) } else { None } )
-					.collect();
-			}
-
-			tableau.h_gate(0);
-			self.h_gate(qubits[0]);
-		}
-
-		// Step five
-		match (tableau.r(0), tableau.r(1)) {
-			(false, true) => {
-				tableau.x_gate(0);
-				self.x_gate(qubits[0]);
-			},
-			(true, true) => {
-				tableau.y_gate(0);
-				self.y_gate(qubits[0]);
-			},
-			_ => {
-				tableau.z_gate(0);
-				self.z_gate(qubits[0]);
-			}
+			self.random_clifford_iter(&qubits_deq);
+			qubits_deq.pop_front();
 		}
 	}
 

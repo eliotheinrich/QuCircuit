@@ -1,11 +1,13 @@
 {
 	"run_name": "test_chp",
 	"simulator_type": "chp",
-	"circuit_type": "default",
+	"circuit_type": "random_clifford",
+	"gate_width": 2,
 	"system_sizes": [50],
 	"partition_sizes": [5],
 	"mzr_probs": [0.15],
-	"timesteps": [50],
-	"measurement_freq": 5,
+	"timesteps": [1000],
+	"measurement_freq": 1000,
+	"num_runs": 5,
 	"filename": "test.json"
 }
