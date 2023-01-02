@@ -5,7 +5,6 @@ use rand::{RngCore, SeedableRng};
 use serde::{Serialize, Deserialize};
 
 use crate::quantum_state::{Entropy, QuantumState, MzrForce};
-use crate::dataframe::DataField;
 
 use std::f32::consts::SQRT_2;
 const ZERO : Complex<f32> = Complex::new(0., 0.);

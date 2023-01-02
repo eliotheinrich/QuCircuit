@@ -17,6 +17,12 @@ fn compute_entropy_run(args: Vec<String>) {
 
 fn default() {
     println!("Success!");
+    
+    use quantum_circuit::quantum_chp_state::QuantumCHPState;
+    use quantum_circuit::quantum_state::QuantumState;
+
+    let mut s = QuantumCHPState::new(4);
+    s.random_clifford(vec![0, 1, 2, 3]);
 }
 
 fn main() {

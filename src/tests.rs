@@ -12,7 +12,6 @@ pub mod tests {
 	use crate::quantum_graph_state::QuantumGraphState;
 	use crate::quantum_vector_state::QuantumVectorState;
 	use crate::quantum_state::{QuantumProgram, QuantumState, Entropy, MzrForce};
-	use crate::dataframe::{Sample, DataSlide};
 
 	const EPS: f32 = 0.0001;
 
@@ -110,66 +109,6 @@ pub mod tests {
 		}
 	}
 
-	#[test]
-	fn test_sample() {
-		let mut v1: Vec<f32> = vec![1.5, 3.2, 5.3, 2.2];
-		let m1: f32 = v1.iter().sum::<f32>()/(v1.len() as f32);
-		let s1: f32 = (v1.iter().map(|x| (x - m1).powi(2)).sum::<f32>()/(v1.len() as f32)).powf(0.5);
-		let sample1 = Sample::from(&v1);
-		assert!(isclose(m1, sample1.mean));
-		assert!(isclose(s1, sample1.std));
-		assert!(v1.len() == sample1.num_samples);
-
-		let mut v2: Vec<f32> = vec![4.3, 7.8, 9.2];
-		let m2: f32 = v2.iter().sum::<f32>()/(v2.len() as f32);
-		let s2: f32 = (v2.iter().map(|x| (x - m2).powi(2)).sum::<f32>()/(v2.len() as f32)).powf(0.5);
-		let sample2 = Sample::from(&v2);
-		assert!(isclose(m2, sample2.mean));
-		assert!(isclose(s2, sample2.std));
-		assert!(v2.len() == sample2.num_samples);
-
-
-
-		let mut v3: Vec<f32> = Vec::new();
-		v3.append(&mut v1);
-		v3.append(&mut v2);
-		let m3: f32 = v3.iter().sum::<f32>()/(v3.len() as f32);
-		let s3: f32 = (v3.iter().map(|x| (x - m3).powi(2)).sum::<f32>()/(v3.len() as f32)).powf(0.5);
-		let sample3 = Sample::from(&v3);
-		assert!(isclose(m3, sample3.mean));
-		assert!(isclose(s3, sample3.std));
-		assert!(v3.len() == sample3.num_samples);
-
-
-
-
-	}
-
-	#[test]
-	fn test_dataslide() {
-		let mut ds1: DataSlide = DataSlide::new();
-		let mut ds2: DataSlide = DataSlide::new();
-		ds1.add_int_param("int1", 1);
-		ds2.add_int_param("int1", 1);
-
-		ds1.add_float_param("float1", 0.1);
-		ds2.add_float_param("float1", 0.1);
-
-		ds1.add_data("data_key");
-		ds1.push_data("data_key", Sample { mean: 0.5, std: 0.0, num_samples: 3 });
-		ds1.push_data("data_key", Sample { mean: 1.0, std: 0.0, num_samples: 8 });
-
-		ds2.add_data("data_key");
-		ds2.push_data("data_key", Sample { mean: 1.0, std: 0.0, num_samples: 3 });
-		ds2.push_data("data_key", Sample { mean: 1.5, std: 0.0, num_samples: 8 });
-
-
-		//let mut ds3 = ds1.combine(&ds2);
-		println!("{}", ds1.congruent(&ds2));
-		//println!("{:?}", ds3);
-
-	}
-	
 
 	#[test]
 	fn test_chp_vs_vector() {

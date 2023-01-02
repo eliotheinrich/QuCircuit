@@ -6,7 +6,6 @@ use serde::{Serialize, Deserialize};
 
 use crate::quantum_vector_state::QuantumVectorState;
 use crate::quantum_state::{Entropy, QuantumState, QuantumProgram, MzrForce};
-use crate::dataframe::DataField;
 
 const CONJUGATION_TABLE: [usize; 24] = [3, 6, 6, 3, 1, 1, 4, 4, 5, 2, 5, 2, 1, 1, 4, 4, 5, 2, 5, 2, 3, 6, 6, 3];
 

@@ -2,8 +2,8 @@
 	"run_name": "timeseries",
 	"simulator_type": "chp",
 	"circuit_type": "default",
-	"system_sizes": [400],
-	"partition_sizes": [200],
+	"system_sizes": [1024],
+	"partition_sizes": [512],
 	"mzr_probs": [0.138],
 	"timesteps": [500],
 	"num_runs": 100,
@@ -11,5 +11,5 @@
 	"spacing": 5,
 	"measurement_freq": 5,
 	"temporal_avg": false,
-	"filename": "timeseries.json"
+	"filename": "timeseries_1024.json"
 }

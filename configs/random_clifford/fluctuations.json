@@ -3,15 +3,15 @@
 	"simulator_type": "chp",
 	"circuit_type": "random_clifford",
 	"gate_width": 2,
-	"system_sizes": [200],
-	"partition_sizes": [1, 2, 3, 4, 5, 7, 10, 11, 13, 16, 18, 23, 26, 32, 39, 44, 50, 57, 65, 73, 84, 95, 109, 125, 143, 166, 193],
-	"mzr_probs": [0.16, 0.162, 0.164, 0.166, 0.168],
+	"system_sizes": [1024],
+	"partition_sizes": [1, 2, 3, 4, 5, 7, 10, 11, 13, 16, 18, 23, 26, 32, 39, 44, 50, 57, 65, 73, 84, 95, 109, 125, 143, 166, 193, 220, 240, 280, 350, 400],
+	"mzr_probs": [0.16],
 	"timesteps": [1000],
 	"measurement_freq": 2,
-	"equilibration_steps": 1000, 
+	"equilibration_steps": 3000, 
 	"num_runs": 10,
 	"space_avg": true,
 	"spacing": 5,
 	"temporal_avg": true,
-	"filename": "fluctuations_200_rc_2.json"
+	"filename": "fluctuations_1024_rc_2.json"
 }

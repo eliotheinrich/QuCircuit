@@ -3,14 +3,14 @@
 	"simulator_type": "chp",
 	"circuit_type": "random_clifford",
 	"gate_width": 2,
-	"system_sizes": [200],
-	"partition_sizes": [100],
-	"mzr_probs": [0.16, 0.162, 0.164, 0.166, 0.168],
+	"system_sizes": [1024],
+	"partition_sizes": [512],
+	"mzr_probs": [0.16],
 	"timesteps": [300],
 	"num_runs": 300,
 	"space_avg": true,
 	"spacing": 5,
 	"measurement_freq": 2,
 	"temporal_avg": false,
-	"filename": "timeseries_rc_2.json"
+	"filename": "timeseries_1024_rc_2.json"
 }

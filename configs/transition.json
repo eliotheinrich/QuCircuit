@@ -1,0 +1,16 @@
+{
+	"run_name": "transition",
+	"simulator_type": "chp",
+	"circuit_type": "default",
+	"system_sizes": [1024],
+	"partition_sizes": [512],
+	"mzr_probs": [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19, 0.2, 0.21, 0.22, 0.23, 0.24, 0.25, 0.26],
+	"timesteps": [1000],
+	"measurement_freq": 2,
+	"equilibration_steps": 1000, 
+	"num_runs": 10,
+	"space_avg": true,
+	"spacing": 5,
+	"temporal_avg": true,
+	"filename": "transition_1024.json"
+}

@@ -5,7 +5,7 @@ use crate::quantum_chp_state::QuantumCHPState;
 use crate::quantum_graph_state::QuantumGraphState;
 use crate::quantum_vector_state::QuantumVectorState;
 use crate::quantum_state::{QuantumState, Entropy};
-use crate::dataframe::{Sample, DataFrame, DataSlide, Simulator, RunConfig, ParallelCompute};
+use dataframe::dataframe::{Sample, DataFrame, DataSlide, RunConfig, ParallelCompute};
 
 use serde::{Serialize, Deserialize};
 use rand::rngs::ThreadRng;
@@ -68,11 +68,13 @@ impl EntropyJSONConfig {
     }
 }
 
+#[derive(Clone)]
 enum CircuitType {
     QuantumAutomaton,
     RandomClifford,
 }
 
+#[derive(Clone)]
 struct EntropyConfig {
     circuit_type: CircuitType,
     gate_width: usize,
@@ -277,28 +279,14 @@ impl EntropyConfig {
 
         return entropy;
     }
-
-    fn save_to_dataslide<Q: QuantumState + Entropy + Clone>(&self, dataslide: &mut DataSlide, quantum_state: &mut Q) {
-        let mut entropy: Vec<Sample> = self.compute_entropy(quantum_state);
-
-        if self.temporal_avg {
-            let sample: Sample = entropy.iter().fold(Sample { mean: 0., std: 0., num_samples: 0 }, |sum, val| sum.combine(val));
-            entropy = vec![sample];
-        }
-
-        for s in entropy {
-            dataslide.push_data("entropy", s);
-        }
-    }
-
 }
 
 impl RunConfig for EntropyConfig {
-    fn init_state(&self) -> Simulator {
-        return match self.simulator_type.as_str() {
-            "chp" => Simulator::CHP(QuantumCHPState::new(self.system_size)),
-            "graph" => Simulator::Graph(QuantumGraphState::new(self.system_size)),
-            "vector" => Simulator::Vector(QuantumVectorState::new(self.system_size)),
+    fn init_state(&mut self) {
+        match self.simulator_type.as_str() {
+            "chp" => (),
+            "graph" => (),
+            "vector" => (),
             _ => {
                 println!("Error: simulator type provided not supported.");
                 panic!()
@@ -306,7 +294,7 @@ impl RunConfig for EntropyConfig {
         }       
     }
 
-    fn gen_dataslide(&self, mut simulator: Simulator) -> DataSlide {
+    fn gen_dataslide(&mut self) -> DataSlide {
         assert!(self.num_runs > 0);
         let mut dataslide: DataSlide = DataSlide::new();
 
@@ -318,18 +306,34 @@ impl RunConfig for EntropyConfig {
 
         dataslide.add_data("entropy");
         
-        match simulator {
-            Simulator::CHP(mut state) => self.save_to_dataslide(&mut dataslide, &mut state),
-            Simulator::Graph(mut state) => self.save_to_dataslide(&mut dataslide, &mut state),
-            Simulator::Vector(mut state) => self.save_to_dataslide(&mut dataslide, &mut state),
-            Simulator::None => {
-                println!("State not initialized!");
-                panic!();
-            }
+        // TODO revisit so that simulator is consistently stored in config
+        let mut entropy: Vec<Sample> =
+        match self.simulator_type.as_str() {
+            "chp" => {
+                let mut state: QuantumCHPState = QuantumCHPState::new(self.system_size);
+                self.compute_entropy(&mut state)
+            }, 
+            "graph" => {
+                let mut state: QuantumGraphState = QuantumGraphState::new(self.system_size);
+                self.compute_entropy(&mut state)
+            }, 
+            "vector" => {
+                let mut state: QuantumVectorState = QuantumVectorState::new(self.system_size);
+                self.compute_entropy(&mut state)
+            }, 
+            _ => panic!()
         };
 
-        return dataslide;
-            
+        if self.temporal_avg {
+            let sample: Sample = entropy.iter().fold(Sample { mean: 0., std: 0., num_samples: 0 }, |sum, val| sum.combine(val));
+            entropy = vec![sample];
+        }
+
+        for s in entropy {
+            dataslide.push_data("entropy", s);
+        }
+
+        dataslide
     }
 }
 

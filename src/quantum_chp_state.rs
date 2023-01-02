@@ -6,7 +6,6 @@ use rand::{RngCore, SeedableRng};
 use serde::{Serialize, Deserialize};
 
 use crate::quantum_state::{Entropy, QuantumState, MzrForce};
-use crate::dataframe::DataField;
 use crate::quantum_vector_state::QuantumVectorState;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
